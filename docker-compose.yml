@@ -1,0 +1,19 @@
+# Khusus dev lokal. Aplikasi TIDAK ikut di-compose - jalankan lewat `pnpm dev` di host.
+# Kredensial di sini plaintext - wajar untuk dev lokal, JANGAN dipakai sebagai basis compose produksi.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: accounting_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports: ["5433:5432"]
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d accounting_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
