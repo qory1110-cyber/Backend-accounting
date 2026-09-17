@@ -77,7 +77,7 @@ export const businessRoutesPlugin = async (fastify: FastifyInstance) => {
     handler: async (req, res) => {
       const business = await findBusinessById(req.params.businessId);
       if (!business) return sendError(res, 404, 'NotFound', 'Bisnis tidak ditemukan');
-      return sendData(res, business);
+      return sendData(res, { ...business, role: req.businessRole });
     },
   });
 
