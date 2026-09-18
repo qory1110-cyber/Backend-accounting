@@ -1,6 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import db from '../db/index.js';
 import { businesses, userBusinessRoles, users } from '../db/schema.js';
+import { seedDefaultChartOfAccounts } from './ChartOfAccountRepository.js';
 
 // ---------------------------------------------------------------------------
 // Prinsip wajib (Backend-Boilerplate-Guide.pdf §5.4 + LAPORAN_FASE_1_2 §2.4):
@@ -25,6 +26,11 @@ export async function createBusinessWithAdmin(
       role: 'admin',
       status: 'active',
     });
+
+    // Setiap bisnis baru langsung dapat Chart of Accounts standar sebagai
+    // starting point (tugas 1.4 poin 3) - dalam transaksi yang sama, supaya
+    // tidak mungkin ada bisnis baru tanpa COA kalau salah satu langkah gagal.
+    await seedDefaultChartOfAccounts(business.id, tx);
 
     return business;
   });

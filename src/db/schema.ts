@@ -21,13 +21,7 @@ import {
 // snake_case (business_id) tanpa perlu ditulis manual.
 
 export const businessRoleEnum = pgEnum('business_role', ['admin', 'accountant', 'viewer']);
-export const accountCategoryEnum = pgEnum('account_category', [
-  'Asset',
-  'Liability',
-  'Equity',
-  'Revenue',
-  'Expense',
-]);
+export const accountCategoryEnum = pgEnum('account_category', ['Asset', 'Liability', 'Equity', 'Income', 'Expense']);
 export const auditActionEnum = pgEnum('audit_action', ['CREATE', 'UPDATE', 'DELETE']);
 
 // --- Bisnis & Pengguna (Multi-Tenant & Access) ------------------------------
@@ -81,6 +75,7 @@ export const chartOfAccounts = pgTable(
     groupName: varchar({ length: 100 }),
     currencyCode: varchar({ length: 3 }).notNull().default('IDR'),
     isControlAccount: boolean().notNull().default(false),
+    isActive: boolean().notNull().default(true), // <- baris baru: toggle §7.4-7.5 dokumen analisis
     deletedAt: timestamp(), // Adendum 1.1 §A.2
   },
   (table) => [unique().on(table.businessId, table.code)],
