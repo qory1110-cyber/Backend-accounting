@@ -83,17 +83,18 @@ export const chartOfAccounts = pgTable(
 
 export const contacts = pgTable('contacts', {
   id: uuid().defaultRandom().primaryKey(),
-  businessId: uuid()
-    .notNull()
-    .references(() => businesses.id, { onDelete: 'cascade' }),
+  businessId: uuid().notNull().references(() => businesses.id, { onDelete: 'cascade' }),
   code: varchar({ length: 50 }),
   name: varchar({ length: 225 }).notNull(),
   email: varchar({ length: 225 }),
   billingAddress: text(),
+  deliveryAddress: text(), // baru - §8.3 dokumen analisis Customers
   isCustomer: boolean().notNull().default(false),
   isSupplier: boolean().notNull().default(false),
   creditLimit: numeric({ precision: 18, scale: 2 }).notNull().default('0.00'),
-  deletedAt: timestamp(), // Adendum 1.1 §A.2
+  autofillSalesInvoiceDueDate: boolean().notNull().default(false), // baru - §8.3
+  isActive: boolean().notNull().default(true), // baru - toggle §8.4-8.5, BUKAN deletedAt
+  deletedAt: timestamp(), // dibiarkan menganggur, sama seperti chart_of_accounts
 });
 
 export const bankAccounts = pgTable('bank_accounts', {

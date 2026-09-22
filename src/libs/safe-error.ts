@@ -19,3 +19,13 @@ export function safeErrorMessage(error: unknown, fallback = 'Terjadi kesalahan')
   if (error instanceof Error) return error.message;
   return fallback;
 }
+
+const PG_FOREIGN_KEY_VIOLATION = '23503';
+
+// Dipakai untuk DELETE yang harus ditolak kalau data masih direferensikan
+// tabel lain (mis. customer yang sudah pernah dipakai di journal_entry_lines).
+export function isPgForeignKeyViolation(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const err = error as { code?: string; cause?: { code?: string } };
+  return err.code === PG_FOREIGN_KEY_VIOLATION || err.cause?.code === PG_FOREIGN_KEY_VIOLATION;
+}

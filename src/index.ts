@@ -19,6 +19,7 @@ import { authRoutesPlugin } from './plugins/AuthRoutes.js';
 import { userRoutesPlugin } from './plugins/UserRoutes.js';
 import { businessRoutesPlugin } from './plugins/BusinessRoutes.js';
 import { chartOfAccountRoutesPlugin } from './plugins/ChartOfAccountRoutes.js';
+import { customerRoutesPlugin } from './plugins/CustomerRoutes.js';
 
 async function main() {
   const app = Fastify({ loggerInstance: logger }).withTypeProvider<ZodTypeProvider>();
@@ -99,6 +100,7 @@ async function main() {
       instance.register(userRoutesPlugin, { prefix: '/users' });
       instance.register(businessRoutesPlugin, { prefix: '/businesses' });
       instance.register(chartOfAccountRoutesPlugin, { prefix: '/businesses' });
+      instance.register(customerRoutesPlugin, { prefix: '/businesses' });
     },
     { prefix: '/api/v1' },
   );
