@@ -133,6 +133,7 @@ export const journalEntries = pgTable('journal_entries', {
   sourceModule: varchar({ length: 50 }).notNull(),
   sourceId: uuid(),
   description: text(),
+  createdAt: timestamp().notNull().defaultNow(),
 });
 
 export const journalEntryLines = pgTable('journal_entry_lines', {

@@ -1,0 +1,1 @@
+ALTER TABLE "journal_entries" ADD COLUMN "created_at" timestamp DEFAULT now() NOT NULL;

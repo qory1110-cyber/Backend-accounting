@@ -28,6 +28,7 @@ import { receiptRoutesPlugin } from './plugins/ReceiptRoutes.js';
 import { bankReconciliationRoutesPlugin } from './plugins/BankReconciliationRoutes.js';
 import { paymentRoutesPlugin } from './plugins/PaymentRoutes.js';
 import { interAccountTransferRoutesPlugin } from './plugins/InterAccountTransferRoutes.js';
+import { journalEntryRoutesPlugin } from './plugins/JournalEntryRoutes.js';
 
 
 async function main() {
@@ -118,6 +119,7 @@ async function main() {
       instance.register(receiptRoutesPlugin, { prefix: '/businesses' });
       instance.register(paymentRoutesPlugin, { prefix: '/businesses' });
       instance.register(interAccountTransferRoutesPlugin, { prefix: '/businesses' });
+      instance.register(journalEntryRoutesPlugin, { prefix: '/businesses' });
     },
     { prefix: '/api/v1' },
   );

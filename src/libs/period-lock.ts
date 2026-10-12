@@ -1,10 +1,11 @@
-import { inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import db from '../db/index.js';
 import { bankAccounts } from '../db/schema.js';
 
 // Mengembalikan lockDate terbesar milik bank-bank yang terlibat BILA tanggal
 // transaksi jatuh di periode terkunci; null kalau transaksi boleh dilanjutkan.
 export async function findLockedUntil(bankAccountIds: string[], date: string): Promise<string | null> {
+  if (bankAccountIds.length === 0) return null;
   const rows = await db
     .select({ lockDate: bankAccounts.lockDate })
     .from(bankAccounts)
@@ -18,6 +19,25 @@ export async function findLockedUntil(bankAccountIds: string[], date: string): P
     }
   }
   return lockedUntil;
+}
+
+// Dipakai transaksi yang barisnya berupa akun GL (mis. Journal Entries): akun yang
+// merupakan Control Account sebuah bank dicek terhadap lock date bank itu.
+// Jurnal yang tidak menyentuh bank manapun lolos (belum ada lock global).
+export async function findLockedUntilForAccounts(
+  businessId: string,
+  accountIds: string[],
+  date: string,
+): Promise<string | null> {
+  if (accountIds.length === 0) return null;
+  const banks = await db
+    .select({ id: bankAccounts.id })
+    .from(bankAccounts)
+    .where(and(eq(bankAccounts.businessId, businessId), inArray(bankAccounts.controlAccountId, accountIds)));
+  return findLockedUntil(
+    banks.map((b) => b.id),
+    date,
+  );
 }
 
 export function periodLockedMessage(lockedUntil: string, action: 'create' | 'delete') {
