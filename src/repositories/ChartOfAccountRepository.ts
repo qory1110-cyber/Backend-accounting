@@ -1,19 +1,52 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql, desc } from 'drizzle-orm';
 import db from '../db/index.js';
 import { chartOfAccounts } from '../db/schema.js';
 
 // Sama seperti seluruh repository lain (§2.4 LAPORAN_FASE_1_2_Backend.docx):
 // businessId WAJIB eksplisit di tiap fungsi, tidak pernah query by-id saja.
 
-export async function listChartOfAccounts(businessId: string, category?: string) {
-  const conditions = [eq(chartOfAccounts.businessId, businessId)]; // isNull(deletedAt) dihapus - tidak relevan lagi untuk COA
+export async function listChartOfAccounts(businessId: string, page: number, pageSize: number, category?: string) {
+  const conditions = [eq(chartOfAccounts.businessId, businessId)];
   if (category) conditions.push(eq(chartOfAccounts.category, category as (typeof chartOfAccounts.category.enumValues)[number]));
+  const whereClause = and(...conditions);
 
-  return db
+  const [{ count }] = await db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(chartOfAccounts)
+    .where(whereClause);
+
+  // Urut kategori (sesuai urutan enum: Asset, Liability, Equity, Income, Expense),
+  // lalu kode. Kode unik per bisnis, jadi urutannya pasti.
+  const data = await db
     .select()
     .from(chartOfAccounts)
+    .where(whereClause)
+    .orderBy(chartOfAccounts.category, chartOfAccounts.code)
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+
+  return { data, total: Number(count) };
+}
+
+// Untuk dropdown pencarian: ringan, diurutkan dari yang TERAKHIR DIUBAH,
+// dengan filter kategori opsional (Income untuk faktur penjualan, dst).
+export async function listRecentChartOfAccounts(businessId: string, limit: number, category?: string) {
+  const conditions = [eq(chartOfAccounts.businessId, businessId)];
+  if (category) {
+    conditions.push(eq(chartOfAccounts.category, category as (typeof chartOfAccounts.category.enumValues)[number]));
+  }
+  return db
+    .select({
+      id: chartOfAccounts.id,
+      code: chartOfAccounts.code,
+      name: chartOfAccounts.name,
+      category: chartOfAccounts.category,
+      isActive: chartOfAccounts.isActive,
+    })
+    .from(chartOfAccounts)
     .where(and(...conditions))
-    .orderBy(chartOfAccounts.code);
+    .orderBy(desc(chartOfAccounts.updatedAt), chartOfAccounts.code)
+    .limit(limit);
 }
 
 export async function getChartOfAccountById(businessId: string, accountId: string) {
@@ -62,7 +95,7 @@ export async function updateChartOfAccount(
 ) {
   const [row] = await db
     .update(chartOfAccounts)
-    .set(data as Partial<typeof chartOfAccounts.$inferInsert>)
+        .set({ ...data, updatedAt: new Date() } as Partial<typeof chartOfAccounts.$inferInsert>)
     .where(
       and(
         eq(chartOfAccounts.id, accountId),
@@ -78,7 +111,7 @@ export async function updateChartOfAccount(
 export async function setChartOfAccountActive(businessId: string, accountId: string, isActive: boolean) {
   const [row] = await db
     .update(chartOfAccounts)
-    .set({ isActive })
+    .set({ isActive, updatedAt: new Date() })
     .where(and(eq(chartOfAccounts.id, accountId), eq(chartOfAccounts.businessId, businessId)))
     .returning();
   return row ?? null;
@@ -114,4 +147,15 @@ export async function seedDefaultChartOfAccounts(
   await dbClient.insert(chartOfAccounts).values(
     DEFAULT_CHART_OF_ACCOUNTS.map((a) => ({ businessId, ...a })),
   );
+}
+
+// Konsisten dengan Customer/Supplier: boleh hapus permanen HANYA kalau
+// belum pernah dipakai transaksi apapun (FK constraint di journal_entry_lines
+// yang menegakkan ini - lihat isPgForeignKeyViolation di route).
+export async function deleteChartOfAccount(businessId: string, accountId: string) {
+  const result = await db
+    .delete(chartOfAccounts)
+    .where(and(eq(chartOfAccounts.id, accountId), eq(chartOfAccounts.businessId, businessId)))
+    .returning({ id: chartOfAccounts.id });
+  return result.length > 0;
 }

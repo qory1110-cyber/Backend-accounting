@@ -46,3 +46,16 @@ export const CustomerParamsSchema = z.object({
   businessId: z.string().uuid(),
   customerId: z.string().uuid(),
 });
+
+export const RecentCustomerResponseSchema = z.object({
+  data: z.array(z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    code: z.string().nullable(),
+    isActive: z.boolean(),
+  })),
+});
+
+export const RecentCustomerQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});

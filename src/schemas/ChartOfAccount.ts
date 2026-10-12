@@ -45,3 +45,18 @@ export const ChartOfAccountParamsSchema = z.object({
 export const ChartOfAccountToggleActiveSchema = z.object({
   isActive: z.boolean(),
 });
+
+export const RecentChartOfAccountResponseSchema = z.object({
+  data: z.array(z.object({
+    id: z.string().uuid(),
+    code: z.string(),
+    name: z.string(),
+    category: AccountCategorySchema,
+    isActive: z.boolean(),
+  })),
+});
+
+export const RecentChartOfAccountQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  category: AccountCategorySchema.optional(),
+});

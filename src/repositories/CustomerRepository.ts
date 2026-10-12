@@ -1,27 +1,61 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql, desc } from 'drizzle-orm';
 import db from '../db/index.js';
-import { contacts } from '../db/schema.js';
+import { contacts, salesInvoices, salesInvoiceLines, receiptLines } from '../db/schema.js';
 
-// Sama seperti seluruh repository lain: businessId eksplisit, dan di sini
-// SELALU filter isCustomer: true - tabel `contacts` dipakai bersama dengan
-// modul Suppliers (isSupplier: true), satu kontak boleh dua-duanya sekaligus.
+async function computeAccountsReceivable(customerId: string): Promise<number> {
+  const [invoiceTotal] = await db
+    .select({ total: sql<string>`COALESCE(SUM(${salesInvoiceLines.qty} * ${salesInvoiceLines.unitPrice}), 0)` })
+    .from(salesInvoiceLines)
+    .innerJoin(salesInvoices, eq(salesInvoiceLines.salesInvoiceId, salesInvoices.id))
+    .where(and(eq(salesInvoices.customerId, customerId), eq(salesInvoices.status, 'sent')));
 
-function toResponseShape(row: typeof contacts.$inferSelect) {
+  const [allocatedTotal] = await db
+    .select({ total: sql<string>`COALESCE(SUM(${receiptLines.amount}), 0)` })
+    .from(receiptLines)
+    .innerJoin(salesInvoices, eq(receiptLines.salesInvoiceId, salesInvoices.id))
+    .where(and(eq(salesInvoices.customerId, customerId), eq(salesInvoices.status, 'sent')));
+
+  return Number(invoiceTotal.total) - Number(allocatedTotal.total);
+}
+
+async function toResponseShape(row: typeof contacts.$inferSelect) {
   return {
     ...row,
-    // Field dihitung, belum ada modul sumbernya (Sales Invoices/Receipts) - lihat catatan di schema.
-    accountsReceivable: 0,
+    accountsReceivable: await computeAccountsReceivable(row.id),
     unallocatedReceipts: 0,
   };
 }
 
-export async function listCustomers(businessId: string) {
+export async function listCustomers(businessId: string, page: number, pageSize: number) {
+  const whereClause = and(eq(contacts.businessId, businessId), eq(contacts.isCustomer, true));
+
+  const [{ count }] = await db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(contacts)
+    .where(whereClause);
+
   const rows = await db
     .select()
     .from(contacts)
+    .where(whereClause)
+    .orderBy(contacts.name, contacts.id)
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+
+  const data = await Promise.all(rows.map(toResponseShape));
+
+  return { data, total: Number(count) };
+}
+
+// Untuk dropdown pencarian: ringan (tanpa accountsReceivable yang mahal
+// dihitung), diurutkan dari yang TERAKHIR DIUBAH, dibatasi jumlahnya.
+export async function listRecentCustomers(businessId: string, limit: number) {
+  return db
+    .select({ id: contacts.id, name: contacts.name, code: contacts.code, isActive: contacts.isActive })
+    .from(contacts)
     .where(and(eq(contacts.businessId, businessId), eq(contacts.isCustomer, true)))
-    .orderBy(contacts.name);
-  return rows.map(toResponseShape);
+    .orderBy(desc(contacts.updatedAt), contacts.name)
+    .limit(limit);
 }
 
 export async function getCustomerById(businessId: string, customerId: string) {
@@ -76,6 +110,7 @@ export async function updateCustomer(
     .set({
       ...rest,
       ...(creditLimit !== undefined ? { creditLimit: creditLimit.toString() } : {}),
+      updatedAt: new Date(),
     } as Partial<typeof contacts.$inferInsert>)
     .where(and(eq(contacts.id, customerId), eq(contacts.businessId, businessId), eq(contacts.isCustomer, true)))
     .returning();
@@ -85,16 +120,12 @@ export async function updateCustomer(
 export async function setCustomerActive(businessId: string, customerId: string, isActive: boolean) {
   const [row] = await db
     .update(contacts)
-    .set({ isActive })
+    .set({ isActive, updatedAt: new Date() })
     .where(and(eq(contacts.id, customerId), eq(contacts.businessId, businessId), eq(contacts.isCustomer, true)))
     .returning();
   return row ? toResponseShape(row) : null;
 }
 
-// Larangan hard-delete kalau sudah pernah dipakai transaksi (§8.4 aturan #2).
-// Untuk sekarang, satu-satunya "riwayat transaksi" yang bisa dicek adalah
-// journal_entry_lines (belum ada Sales Invoices/Receipts) - FK constraint
-// di database yang menegakkan ini (lihat isPgForeignKeyViolation di route).
 export async function deleteCustomer(businessId: string, customerId: string) {
   const result = await db
     .delete(contacts)

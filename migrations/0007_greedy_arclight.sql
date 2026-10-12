@@ -1,0 +1,1 @@
+ALTER TABLE "businesses" ADD COLUMN "hidden_modules" text[] DEFAULT '{}'::text[] NOT NULL;

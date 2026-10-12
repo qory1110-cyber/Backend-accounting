@@ -1,0 +1,1 @@
+ALTER TABLE "receipts" ADD COLUMN "cleared" boolean DEFAULT true NOT NULL;

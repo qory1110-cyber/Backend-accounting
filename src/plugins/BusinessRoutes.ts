@@ -6,28 +6,32 @@ import {
   listBusinessesForUser,
   findBusinessById,
   updateBusiness,
+  findModulesWithDataAmongNewlyHidden,
+  deleteBusiness,
   listMembers,
   addMember,
   updateMemberRole,
   removeMember,
 } from '../repositories/BusinessRepository.js';
 import { findUserByEmail, createUser } from '../repositories/UserRepository.js';
-import { sendData, sendError } from '../libs/reply.js';
+import { sendData, sendError, sendPaginated } from '../libs/reply.js';
 import { isPgUniqueViolation } from '../libs/safe-error.js';
 import { randomBytes } from 'crypto';
 import { hashPassword } from '../libs/password.js';
 import {
   BusinessCreateSchema,
   BusinessUpdateSchema,
+  MemberResponseSchema,
   BusinessListResponseSchema,
   BusinessSingleResponseSchema,
   BusinessParamsSchema,
+  BusinessDeleteBodySchema,
   MemberInviteBodySchema,
   MemberRoleUpdateBodySchema,
   MemberParamsSchema,
   MemberListResponseSchema,
 } from '../schemas/Business.js';
-import { Unauthorized, Forbidden, NotFound, Conflict } from '../schemas/globals.js';
+import { Unauthorized, Forbidden, NotFound, Conflict, BadRequest, PaginationQuerySchema, createPaginatedResponseSchema } from '../schemas/globals.js';
 
 export const businessRoutesPlugin = async (fastify: FastifyInstance) => {
   const app = fastify.withTypeProvider<ZodTypeProvider>();
@@ -93,10 +97,32 @@ export const businessRoutesPlugin = async (fastify: FastifyInstance) => {
         401: Unauthorized,
         403: Forbidden,
         404: NotFound,
+        409: Conflict,
       },
     },
     preHandler: [fastify.requireAuth, fastify.requireBusinessScope, fastify.requireRole('admin')],
     handler: async (req, res) => {
+      const existing = await findBusinessById(req.params.businessId);
+      if (!existing) return sendError(res, 404, 'NotFound', 'Bisnis tidak ditemukan');
+
+      // Manager.io asli: modul yang masih punya data tidak boleh disembunyikan,
+      // supaya tidak ada data yang "hilang dari pandangan" tanpa sengaja.
+      if (req.body.hiddenModules) {
+        const withData = await findModulesWithDataAmongNewlyHidden(
+          req.params.businessId,
+          existing.hiddenModules,
+          req.body.hiddenModules,
+        );
+        if (withData.length > 0) {
+          return sendError(
+            res,
+            409,
+            'Conflict',
+            `Modul berikut masih punya data, kosongkan dulu sebelum disembunyikan: ${withData.join(', ')}`,
+          );
+        }
+      }
+
       const business = await updateBusiness(req.params.businessId, req.body);
       if (!business) return sendError(res, 404, 'NotFound', 'Bisnis tidak ditemukan');
       return sendData(res, business);
@@ -111,12 +137,14 @@ export const businessRoutesPlugin = async (fastify: FastifyInstance) => {
       operationId: 'listBusinessMembers',
       security: [{ bearerAuth: [] }],
       params: BusinessParamsSchema,
-      response: { 200: MemberListResponseSchema, 401: Unauthorized, 404: NotFound },
+      querystring: PaginationQuerySchema,
+      response: { 200: createPaginatedResponseSchema(MemberResponseSchema), 401: Unauthorized, 404: NotFound },
     },
     preHandler: [fastify.requireAuth, fastify.requireBusinessScope],
     handler: async (req, res) => {
-      const rows = await listMembers(req.params.businessId);
-      return sendData(res, rows);
+      const { page, pageSize } = req.query;
+      const { data, total } = await listMembers(req.params.businessId, page, pageSize);
+      return sendPaginated(res, data, total, page, pageSize);
     },
   });
 
@@ -162,8 +190,8 @@ export const businessRoutesPlugin = async (fastify: FastifyInstance) => {
         throw err;
       }
 
-      const rows = await listMembers(businessId);
-      return sendData(res, rows, 201);
+      const { data: rows } = await listMembers(businessId, 1, 1000);
+return sendData(res, rows, 201);
     },
   });
 
@@ -196,6 +224,31 @@ export const businessRoutesPlugin = async (fastify: FastifyInstance) => {
     handler: async (req, res) => {
       const removed = await removeMember(req.params.businessId, req.params.userId);
       if (!removed) return sendError(res, 404, 'NotFound', 'Anggota tidak ditemukan di bisnis ini');
+      return res.code(204).send(null);
+    },
+  });
+
+  app.delete('/:businessId', {
+  schema: {
+    tags: ['Business'],
+    operationId: 'deleteBusiness',
+    security: [{ bearerAuth: [] }],
+    params: BusinessParamsSchema,
+    body: BusinessDeleteBodySchema,
+    response: { 204: z.null(), 400: BadRequest, 401: Unauthorized, 403: Forbidden, 404: NotFound },
+    },
+    preHandler: [fastify.requireAuth, fastify.requireBusinessScope, fastify.requireRole('admin')],
+    handler: async (req, res) => {
+      const business = await findBusinessById(req.params.businessId);
+      if (!business) return sendError(res, 404, 'NotFound', 'Bisnis tidak ditemukan');
+
+      // Verifikasi: nama harus diketik PERSIS sama - dicek di server, bukan cuma di frontend,
+      // supaya tidak bisa "dilewati" dengan memanggil API langsung.
+      if (req.body.confirmName !== business.name) {
+      return sendError(res, 400, 'BadRequest', 'Nama bisnis yang diketik tidak cocok');
+      }
+
+      await deleteBusiness(req.params.businessId);
       return res.code(204).send(null);
     },
   });

@@ -3,6 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import {
   listCustomers,
+  listRecentCustomers,
   getCustomerById,
   createCustomer,
   updateCustomer,
@@ -10,17 +11,20 @@ import {
   deleteCustomer,
 } from '../repositories/CustomerRepository.js';
 import { isPgForeignKeyViolation } from '../libs/safe-error.js';
-import { sendData, sendError } from '../libs/reply.js';
+import { sendData, sendError, sendPaginated } from '../libs/reply.js';
 import {
   CustomerCreateSchema,
   CustomerUpdateSchema,
   CustomerToggleActiveSchema,
+  CustomerResponseSchema,
+  RecentCustomerResponseSchema,
+  RecentCustomerQuerySchema,
   CustomerListResponseSchema,
   CustomerSingleResponseSchema,
   CustomerParamsSchema,
 } from '../schemas/Customer.js';
 import { BusinessParamsSchema } from '../schemas/Business.js';
-import { Unauthorized, Forbidden, NotFound, Conflict } from '../schemas/globals.js';
+import { Unauthorized, Forbidden, NotFound, Conflict, PaginationQuerySchema, createPaginatedResponseSchema } from '../schemas/globals.js';
 
 // §8.2 dokumen analisis: Admin atur credit limit & pantau saldo; Staf
 // Billing/Penjualan pilih data pelanggan saat transaksi - jadi READ boleh
@@ -35,11 +39,18 @@ export const customerRoutesPlugin = async (fastify: FastifyInstance) => {
       operationId: 'listCustomers',
       security: [{ bearerAuth: [] }],
       params: BusinessParamsSchema,
-      response: { 200: CustomerListResponseSchema, 401: Unauthorized, 404: NotFound },
+      querystring: PaginationQuerySchema,
+      response: { 200: createPaginatedResponseSchema(CustomerResponseSchema), 401: Unauthorized, 404: NotFound },
     },
     preHandler: [fastify.requireAuth, fastify.requireBusinessScope],
-    handler: async (req, res) => sendData(res, await listCustomers(req.params.businessId)),
+    handler: async (req, res) => {
+      const { page, pageSize } = req.query;
+      const { data, total } = await listCustomers(req.params.businessId, page, pageSize);
+      return sendPaginated(res, data, total, page, pageSize);
+    },
   });
+
+
 
   app.post('/:businessId/customers', {
     schema: {
@@ -55,6 +66,19 @@ export const customerRoutesPlugin = async (fastify: FastifyInstance) => {
       const row = await createCustomer(req.params.businessId, req.body);
       return sendData(res, row, 201);
     },
+  });
+
+  app.get('/:businessId/customers/recent', {
+    schema: {
+      tags: ['Customer'],
+      operationId: 'listRecentCustomers',
+      security: [{ bearerAuth: [] }],
+      params: BusinessParamsSchema,
+      querystring: RecentCustomerQuerySchema,
+      response: { 200: RecentCustomerResponseSchema, 401: Unauthorized, 404: NotFound },
+    },
+    preHandler: [fastify.requireAuth, fastify.requireBusinessScope],
+    handler: async (req, res) => sendData(res, await listRecentCustomers(req.params.businessId, req.query.limit)),
   });
 
   app.get('/:businessId/customers/:customerId', {

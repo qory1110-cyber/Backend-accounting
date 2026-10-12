@@ -1,0 +1,1 @@
+   ALTER TABLE "chart_of_accounts" ADD COLUMN IF NOT EXISTS "updated_at" timestamp DEFAULT now() NOT NULL;

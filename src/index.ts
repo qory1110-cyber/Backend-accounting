@@ -20,6 +20,15 @@ import { userRoutesPlugin } from './plugins/UserRoutes.js';
 import { businessRoutesPlugin } from './plugins/BusinessRoutes.js';
 import { chartOfAccountRoutesPlugin } from './plugins/ChartOfAccountRoutes.js';
 import { customerRoutesPlugin } from './plugins/CustomerRoutes.js';
+import { supplierRoutesPlugin } from './plugins/SupplierRoutes.js';
+import { bankAccountRoutesPlugin } from './plugins/BankAccountRoutes.js';
+import { salesInvoiceRoutesPlugin } from './plugins/SalesInvoiceRoutes.js';
+import { purchaseInvoiceRoutesPlugin } from './plugins/PurchaseInvoiceRoutes.js';
+import { receiptRoutesPlugin } from './plugins/ReceiptRoutes.js';
+import { bankReconciliationRoutesPlugin } from './plugins/BankReconciliationRoutes.js';
+import { paymentRoutesPlugin } from './plugins/PaymentRoutes.js';
+import { interAccountTransferRoutesPlugin } from './plugins/InterAccountTransferRoutes.js';
+
 
 async function main() {
   const app = Fastify({ loggerInstance: logger }).withTypeProvider<ZodTypeProvider>();
@@ -101,6 +110,14 @@ async function main() {
       instance.register(businessRoutesPlugin, { prefix: '/businesses' });
       instance.register(chartOfAccountRoutesPlugin, { prefix: '/businesses' });
       instance.register(customerRoutesPlugin, { prefix: '/businesses' });
+      instance.register(supplierRoutesPlugin, { prefix: '/businesses' });
+      instance.register(bankAccountRoutesPlugin, { prefix: '/businesses' });
+      instance.register(salesInvoiceRoutesPlugin, { prefix: '/businesses' });
+      instance.register(purchaseInvoiceRoutesPlugin, { prefix: '/businesses' });
+      instance.register(bankReconciliationRoutesPlugin, { prefix: '/businesses' });
+      instance.register(receiptRoutesPlugin, { prefix: '/businesses' });
+      instance.register(paymentRoutesPlugin, { prefix: '/businesses' });
+      instance.register(interAccountTransferRoutesPlugin, { prefix: '/businesses' });
     },
     { prefix: '/api/v1' },
   );

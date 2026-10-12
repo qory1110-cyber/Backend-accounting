@@ -1,0 +1,1 @@
+ALTER TABLE "bank_accounts" ADD COLUMN "updated_at" timestamp DEFAULT now() NOT NULL;

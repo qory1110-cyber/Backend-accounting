@@ -1,6 +1,12 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import db from '../db/index.js';
-import { businesses, userBusinessRoles, users } from '../db/schema.js';
+import { businesses, userBusinessRoles, users, contacts,
+  bankAccounts,
+  salesInvoices,
+  purchaseInvoices,
+  receipts,
+  payments,
+  interAccountTransfers, } from '../db/schema.js';
 import { seedDefaultChartOfAccounts } from './ChartOfAccountRepository.js';
 
 // ---------------------------------------------------------------------------
@@ -43,6 +49,7 @@ export async function listBusinessesForUser(userId: string) {
       name: businesses.name,
       baseCurrencyCode: businesses.baseCurrencyCode,
       role: userBusinessRoles.role,
+      hiddenModules: businesses.hiddenModules,
     })
     .from(userBusinessRoles)
     .innerJoin(businesses, eq(businesses.id, userBusinessRoles.businessId))
@@ -87,7 +94,7 @@ export async function findBusinessById(businessId: string) {
 
 export async function updateBusiness(
   businessId: string,
-  data: { name?: string; baseCurrencyCode?: string },
+  data: { name?: string; baseCurrencyCode?: string; hiddenModules?: string[] },
 ) {
   const [row] = await db
     .update(businesses)
@@ -99,8 +106,13 @@ export async function updateBusiness(
 
 // --- Anggota bisnis (Modul Users per-bisnis, §2.5 LAPORAN_FASE_1_2) ---------
 
-export async function listMembers(businessId: string) {
-  return db
+export async function listMembers(businessId: string, page: number, pageSize: number) {
+  const [{ count }] = await db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(userBusinessRoles)
+    .where(eq(userBusinessRoles.businessId, businessId));
+
+  const data = await db
     .select({
       userId: users.id,
       name: users.name,
@@ -110,7 +122,12 @@ export async function listMembers(businessId: string) {
     })
     .from(userBusinessRoles)
     .innerJoin(users, eq(users.id, userBusinessRoles.userId))
-    .where(eq(userBusinessRoles.businessId, businessId));
+    .where(eq(userBusinessRoles.businessId, businessId))
+    .orderBy(userBusinessRoles.role, users.name, users.id)
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+
+  return { data, total: Number(count) };
 }
 
 export async function addMember(
@@ -145,4 +162,76 @@ export async function removeMember(businessId: string, userId: string) {
     .where(and(eq(userBusinessRoles.businessId, businessId), eq(userBusinessRoles.userId, userId)))
     .returning({ id: userBusinessRoles.id });
   return result.length > 0;
+}
+
+export async function deleteBusiness(businessId: string) {
+  const result = await db.delete(businesses).where(eq(businesses.id, businessId)).returning({ id: businesses.id });
+  return result.length > 0;
+}
+
+// Manager.io asli: "Unwanted tabs can be disabled only if they contain no
+// transactions or records" - larangan ini cuma berlaku untuk modul yang
+// BARU hendak disembunyikan pada permintaan ini (bukan yang sudah lama
+// tersembunyi), supaya memunculkan kembali modul lama tetap bebas kapan saja.
+export async function findModulesWithDataAmongNewlyHidden(
+  businessId: string,
+  currentHidden: string[],
+  requestedHidden: string[],
+) {
+  const newlyHidden = requestedHidden.filter((key) => !currentHidden.includes(key));
+  if (newlyHidden.length === 0) return [];
+
+  const checks: Record<string, () => Promise<number>> = {
+    customers: async () => {
+      const rows = await db
+        .select({ id: contacts.id })
+        .from(contacts)
+        .where(and(eq(contacts.businessId, businessId), eq(contacts.isCustomer, true)));
+      return rows.length;
+    },
+    suppliers: async () => {
+      const rows = await db
+        .select({ id: contacts.id })
+        .from(contacts)
+        .where(and(eq(contacts.businessId, businessId), eq(contacts.isSupplier, true)));
+      return rows.length;
+    },
+    'bank-accounts': async () => {
+      const rows = await db.select({ id: bankAccounts.id }).from(bankAccounts).where(eq(bankAccounts.businessId, businessId));
+      return rows.length;
+    },
+    'sales-invoices': async () => {
+      const rows = await db.select({ id: salesInvoices.id }).from(salesInvoices).where(eq(salesInvoices.businessId, businessId));
+      return rows.length;
+    },
+    'purchase-invoices': async () => {
+      const rows = await db
+        .select({ id: purchaseInvoices.id })
+        .from(purchaseInvoices)
+        .where(eq(purchaseInvoices.businessId, businessId));
+      return rows.length;
+    },
+    receipts: async () => {
+      const rows = await db.select({ id: receipts.id }).from(receipts).where(eq(receipts.businessId, businessId));
+      return rows.length;
+    },
+        payments: async () => {
+      const rows = await db.select({ id: payments.id }).from(payments).where(eq(payments.businessId, businessId));
+      return rows.length;
+    },
+    'inter-account-transfers': async () => {
+      const rows = await db
+        .select({ id: interAccountTransfers.id })
+        .from(interAccountTransfers)
+        .where(eq(interAccountTransfers.businessId, businessId));
+      return rows.length;
+    },
+  };
+
+  const withData: string[] = [];
+  for (const key of newlyHidden) {
+    const count = await checks[key]?.();
+    if (count && count > 0) withData.push(key);
+  }
+  return withData;
 }
