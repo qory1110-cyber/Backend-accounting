@@ -12,6 +12,7 @@ import {
   addMember,
   updateMemberRole,
   removeMember,
+  setBusinessLockDate,
 } from '../repositories/BusinessRepository.js';
 import { findUserByEmail, createUser } from '../repositories/UserRepository.js';
 import { sendData, sendError, sendPaginated } from '../libs/reply.js';
@@ -30,6 +31,7 @@ import {
   MemberRoleUpdateBodySchema,
   MemberParamsSchema,
   MemberListResponseSchema,
+  BusinessLockDateBodySchema,
 } from '../schemas/Business.js';
 import { Unauthorized, Forbidden, NotFound, Conflict, BadRequest, PaginationQuerySchema, createPaginatedResponseSchema } from '../schemas/globals.js';
 
@@ -126,6 +128,23 @@ export const businessRoutesPlugin = async (fastify: FastifyInstance) => {
       const business = await updateBusiness(req.params.businessId, req.body);
       if (!business) return sendError(res, 404, 'NotFound', 'Bisnis tidak ditemukan');
       return sendData(res, business);
+    },
+  });
+
+    app.patch('/:businessId/lock-date', {
+    schema: {
+      tags: ['Business'],
+      operationId: 'setBusinessLockDate',
+      security: [{ bearerAuth: [] }],
+      params: BusinessParamsSchema,
+      body: BusinessLockDateBodySchema,
+      response: { 200: BusinessSingleResponseSchema, 401: Unauthorized, 403: Forbidden, 404: NotFound },
+    },
+    preHandler: [fastify.requireAuth, fastify.requireBusinessScope, fastify.requireRole('admin')],
+    handler: async (req, res) => {
+      const business = await setBusinessLockDate(req.params.businessId, req.body.lockDate);
+      if (!business) return sendError(res, 404, 'NotFound', 'Bisnis tidak ditemukan');
+      return sendData(res, { ...business, role: req.businessRole });
     },
   });
 

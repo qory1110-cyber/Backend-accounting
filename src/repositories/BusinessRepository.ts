@@ -50,6 +50,7 @@ export async function listBusinessesForUser(userId: string) {
       baseCurrencyCode: businesses.baseCurrencyCode,
       role: userBusinessRoles.role,
       hiddenModules: businesses.hiddenModules,
+      lockDate: businesses.lockDate,
     })
     .from(userBusinessRoles)
     .innerJoin(businesses, eq(businesses.id, userBusinessRoles.businessId))
@@ -99,6 +100,15 @@ export async function updateBusiness(
   const [row] = await db
     .update(businesses)
     .set(data)
+    .where(and(eq(businesses.id, businessId), isNull(businesses.deletedAt)))
+    .returning();
+  return row ?? null;
+}
+
+export async function setBusinessLockDate(businessId: string, lockDate: string | null) {
+  const [row] = await db
+    .update(businesses)
+    .set({ lockDate })
     .where(and(eq(businesses.id, businessId), isNull(businesses.deletedAt)))
     .returning();
   return row ?? null;

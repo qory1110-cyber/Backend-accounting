@@ -36,6 +36,7 @@ export const businesses = pgTable('businesses', {
   createdAt: timestamp().notNull().defaultNow(),
   deletedAt: timestamp(), // Adendum 1.1 §A.2 — entitas tenant
   hiddenModules: text().array().notNull().default(sql`'{}'::text[]`),
+    lockDate: date(), // kunci global: transaksi bertanggal <= lockDate tidak bisa dibuat/dihapus; berdampingan dengan lockDate per bank
 });
 
 export const users = pgTable('users', {

@@ -23,6 +23,7 @@ import {
 } from '../schemas/PurchaseInvoice.js';
 import { BusinessParamsSchema } from '../schemas/Business.js';
 import { Unauthorized, Forbidden, NotFound, Conflict, BadRequest, PaginationQuerySchema, createPaginatedResponseSchema } from '../schemas/globals.js';
+import { periodLockedMessage } from '../libs/period-lock.js';
 
 // §1.2: Staf Pembelian atau Admin - WRITE dibuka untuk admin + accountant, sama seperti Sales Invoices.
 export const purchaseInvoiceRoutesPlugin = async (fastify: FastifyInstance) => {
@@ -143,11 +144,13 @@ export const purchaseInvoiceRoutesPlugin = async (fastify: FastifyInstance) => {
     },
     preHandler: writeGuards,
     handler: async (req, res) => {
-      const { result, error } = await approvePurchaseInvoice(req.params.businessId, req.params.purchaseInvoiceId);
+      const out = await approvePurchaseInvoice(req.params.businessId, req.params.purchaseInvoiceId);
+      const { result, error } = out;
       if (error === null && !result) return sendError(res, 404, 'NotFound', 'Faktur pembelian tidak ditemukan');
       if (error === 'STATUS_NOT_DRAFT') return sendError(res, 409, 'Conflict', 'Faktur ini sudah disetujui atau dibatalkan');
       if (error === 'NO_LINES') return sendError(res, 400, 'BadRequest', 'Faktur harus punya minimal 1 baris rincian');
       if (error === 'NO_AP_ACCOUNT') return sendError(res, 400, 'BadRequest', 'Akun Utang Usaha (kode 2000) tidak ditemukan di Chart of Accounts');
+      if (out.error === 'PERIOD_LOCKED') return sendError(res, 400, 'BadRequest', periodLockedMessage(out.lockedUntil, 'create'));
       return sendData(res, result);
     },
   });
@@ -158,13 +161,15 @@ export const purchaseInvoiceRoutesPlugin = async (fastify: FastifyInstance) => {
       operationId: 'voidPurchaseInvoice',
       security: [{ bearerAuth: [] }],
       params: PurchaseInvoiceParamsSchema,
-      response: { 200: PurchaseInvoiceSingleResponseSchema, 401: Unauthorized, 403: Forbidden, 404: NotFound, 409: Conflict },
+      response: { 200: PurchaseInvoiceSingleResponseSchema, 400: BadRequest, 401: Unauthorized, 403: Forbidden, 404: NotFound, 409: Conflict },
     },
     preHandler: writeGuards,
-    handler: async (req, res) => {
-      const { result, error } = await voidPurchaseInvoice(req.params.businessId, req.params.purchaseInvoiceId);
+        handler: async (req, res) => {
+      const out = await voidPurchaseInvoice(req.params.businessId, req.params.purchaseInvoiceId);
+      const { result, error } = out;
       if (error === null && !result) return sendError(res, 404, 'NotFound', 'Faktur pembelian tidak ditemukan');
       if (error === 'STATUS_NOT_APPROVED') return sendError(res, 409, 'Conflict', "Cuma faktur berstatus 'approved' yang bisa di-void");
+      if (out.error === 'PERIOD_LOCKED') return sendError(res, 400, 'BadRequest', periodLockedMessage(out.lockedUntil, 'void'));
       return sendData(res, result);
     },
   });

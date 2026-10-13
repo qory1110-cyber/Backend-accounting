@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createSingleResponseSchema } from './globals.js';
+import { createSingleResponseSchema, IsoDateSchema } from './globals.js';
 
 export const BusinessRoleSchema = z.enum(['admin', 'accountant', 'viewer']);
 
@@ -28,12 +28,17 @@ export const BusinessUpdateSchema = z.object({
   hiddenModules: z.array(HideableModuleSchema).optional(),
 });
 
+export const BusinessLockDateBodySchema = z.object({
+  lockDate: IsoDateSchema.nullable(),
+});
+
 export const BusinessResponseSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
   baseCurrencyCode: z.string(),
   role: BusinessRoleSchema.optional(),
   hiddenModules: z.array(z.string()),
+  lockDate: z.string().nullable(),
 });
 
 export const BusinessListResponseSchema = z.object({

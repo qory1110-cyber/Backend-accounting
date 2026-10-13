@@ -142,7 +142,7 @@ export async function createPayment(
 ) {
   const bankAccountInfo = await getBankAccountInfo(businessId, data.paidFromBankAccountId);
   if (!bankAccountInfo) return { result: null, error: 'INVALID_BANK_ACCOUNT' as const };
-  const lockedUntil = await findLockedUntil([data.paidFromBankAccountId], data.paymentDate);
+  const lockedUntil = await findLockedUntil(businessId, [data.paidFromBankAccountId], data.paymentDate);
   if (lockedUntil) return { result: null, error: 'PERIOD_LOCKED' as const, lockedUntil };
 
   const [payee] = await db
@@ -265,7 +265,7 @@ export async function setPaymentCleared(businessId: string, paymentId: string, c
 export async function deletePayment(businessId: string, paymentId: string) {
   const payment = await getPaymentById(businessId, paymentId);
   if (!payment) return { deleted: false, lockedUntil: null };
-  const lockedUntil = await findLockedUntil([payment.paidFromBankAccountId], payment.paymentDate);
+  const lockedUntil = await findLockedUntil(businessId, [payment.paidFromBankAccountId], payment.paymentDate);
   if (lockedUntil) return { deleted: false, lockedUntil };
 
   const originalLines = await db

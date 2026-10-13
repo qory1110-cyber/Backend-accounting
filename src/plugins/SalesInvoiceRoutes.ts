@@ -23,6 +23,7 @@ import {
 } from '../schemas/SalesInvoice.js';
 import { BusinessParamsSchema } from '../schemas/Business.js';
 import { Unauthorized, Forbidden, NotFound, Conflict, BadRequest, PaginationQuerySchema, createPaginatedResponseSchema } from '../schemas/globals.js';
+import { periodLockedMessage } from '../libs/period-lock.js';
 
 // §10.2: Admin & Staf Penjualan sama-sama bisa buat/kirim faktur - WRITE dibuka untuk admin+accountant.
 export const salesInvoiceRoutesPlugin = async (fastify: FastifyInstance) => {
@@ -143,11 +144,13 @@ export const salesInvoiceRoutesPlugin = async (fastify: FastifyInstance) => {
     },
     preHandler: writeGuards,
     handler: async (req, res) => {
-      const { result, error } = await sendSalesInvoice(req.params.businessId, req.params.salesInvoiceId);
+      const out = await sendSalesInvoice(req.params.businessId, req.params.salesInvoiceId);
+      const { result, error } = out;
       if (error === null && !result) return sendError(res, 404, 'NotFound', 'Faktur tidak ditemukan');
       if (error === 'STATUS_NOT_DRAFT') return sendError(res, 409, 'Conflict', 'Faktur ini sudah dikirim atau dibatalkan');
       if (error === 'NO_LINES') return sendError(res, 400, 'BadRequest', 'Faktur harus punya minimal 1 baris rincian');
       if (error === 'NO_AR_ACCOUNT') return sendError(res, 400, 'BadRequest', 'Akun Piutang Usaha (kode 1200) tidak ditemukan di Chart of Accounts');
+      if (out.error === 'PERIOD_LOCKED') return sendError(res, 400, 'BadRequest', periodLockedMessage(out.lockedUntil, 'create'));
       return sendData(res, result);
     },
   });
@@ -158,13 +161,15 @@ export const salesInvoiceRoutesPlugin = async (fastify: FastifyInstance) => {
       operationId: 'voidSalesInvoice',
       security: [{ bearerAuth: [] }],
       params: SalesInvoiceParamsSchema,
-      response: { 200: SalesInvoiceSingleResponseSchema, 401: Unauthorized, 403: Forbidden, 404: NotFound, 409: Conflict },
+      response: { 200: SalesInvoiceSingleResponseSchema, 400: BadRequest, 401: Unauthorized, 403: Forbidden, 404: NotFound, 409: Conflict },
     },
     preHandler: writeGuards,
-    handler: async (req, res) => {
-      const { result, error } = await voidSalesInvoice(req.params.businessId, req.params.salesInvoiceId);
+        handler: async (req, res) => {
+      const out = await voidSalesInvoice(req.params.businessId, req.params.salesInvoiceId);
+      const { result, error } = out;
       if (error === null && !result) return sendError(res, 404, 'NotFound', 'Faktur tidak ditemukan');
       if (error === 'STATUS_NOT_SENT') return sendError(res, 409, 'Conflict', "Cuma faktur berstatus 'sent' yang bisa di-void");
+      if (out.error === 'PERIOD_LOCKED') return sendError(res, 400, 'BadRequest', periodLockedMessage(out.lockedUntil, 'void'));
       return sendData(res, result);
     },
   });

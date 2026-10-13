@@ -9,6 +9,7 @@ import {
   journalEntryLines,
   receiptLines,
 } from '../db/schema.js';
+import { findLockedUntil } from '../libs/period-lock.js';
 
 type LineInput = { accountId: string; qty: number; unitPrice: number };
 
@@ -239,6 +240,8 @@ export async function sendSalesInvoice(businessId: string, salesInvoiceId: strin
 
   const arAccount = await findArControlAccount(businessId);
   if (!arAccount) return { result: null, error: 'NO_AR_ACCOUNT' as const };
+  const lockedUntil = await findLockedUntil(businessId, [], invoice.issueDate);
+  if (lockedUntil) return { result: null, error: 'PERIOD_LOCKED' as const, lockedUntil };
 
   await db.transaction(async (tx) => {
     const [journalEntry] = await tx
@@ -288,6 +291,8 @@ export async function voidSalesInvoice(businessId: string, salesInvoiceId: strin
   if (!invoice) return { result: null, error: null };
   if (invoice.status !== 'sent') return { result: null, error: 'STATUS_NOT_SENT' as const };
   if (!invoice.journalEntryId) return { result: null, error: 'NO_JOURNAL' as const };
+  const lockedUntil = await findLockedUntil(businessId, [], invoice.issueDate);
+  if (lockedUntil) return { result: null, error: 'PERIOD_LOCKED' as const, lockedUntil };
 
   const originalLines = await db
     .select()

@@ -148,7 +148,7 @@ export async function createReceipt(
 ) {
   const bankAccount = await getBankAccountControlAccount(businessId, data.receivedInBankAccountId);
   if (!bankAccount) return { result: null, error: 'INVALID_BANK_ACCOUNT' as const };
-  const lockedUntil = await findLockedUntil([data.receivedInBankAccountId], data.receiptDate);
+  const lockedUntil = await findLockedUntil(businessId, [data.receivedInBankAccountId], data.receiptDate);
   if (lockedUntil) return { result: null, error: 'PERIOD_LOCKED' as const, lockedUntil };
 
   const arAccount = await findArControlAccount(businessId);
@@ -268,7 +268,7 @@ export async function createReceipt(
 export async function deleteReceipt(businessId: string, receiptId: string) {
   const receipt = await getReceiptById(businessId, receiptId);
     if (!receipt) return { deleted: false, lockedUntil: null };
-  const lockedUntil = await findLockedUntil([receipt.receivedInBankAccountId], receipt.receiptDate);
+  const lockedUntil = await findLockedUntil(businessId, [receipt.receivedInBankAccountId], receipt.receiptDate);
   if (lockedUntil) return { deleted: false, lockedUntil };
 
   const originalLines = await db

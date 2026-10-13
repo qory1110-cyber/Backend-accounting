@@ -9,6 +9,7 @@ import {
   journalEntries,
   journalEntryLines,
 } from '../db/schema.js';
+import { findLockedUntil } from '../libs/period-lock.js';
 
 export class BusinessError extends Error {}
 
@@ -238,6 +239,8 @@ export async function approvePurchaseInvoice(businessId: string, purchaseInvoice
 
   const apAccount = await findApControlAccount(businessId);
   if (!apAccount) return { result: null, error: 'NO_AP_ACCOUNT' as const };
+  const lockedUntil = await findLockedUntil(businessId, [], invoice.issueDate);
+  if (lockedUntil) return { result: null, error: 'PERIOD_LOCKED' as const, lockedUntil };
 
   await db.transaction(async (tx) => {
     const [journalEntry] = await tx
@@ -287,6 +290,8 @@ export async function voidPurchaseInvoice(businessId: string, purchaseInvoiceId:
   if (!invoice) return { result: null, error: null };
   if (invoice.status !== 'approved') return { result: null, error: 'STATUS_NOT_APPROVED' as const };
   if (!invoice.journalEntryId) return { result: null, error: 'NO_JOURNAL' as const };
+  const lockedUntil = await findLockedUntil(businessId, [], invoice.issueDate);
+  if (lockedUntil) return { result: null, error: 'PERIOD_LOCKED' as const, lockedUntil };
 
   const originalLines = await db
     .select()

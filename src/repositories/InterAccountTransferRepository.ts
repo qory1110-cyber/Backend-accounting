@@ -76,7 +76,11 @@ export async function createTransfer(
   const paidFrom = await getBankInfo(businessId, data.paidFromBankAccountId);
   const receivedIn = await getBankInfo(businessId, data.receivedInBankAccountId);
   if (!paidFrom || !receivedIn) return { result: null, error: 'INVALID_BANK_ACCOUNT' as const };
-  const lockedUntil = await findLockedUntil([data.paidFromBankAccountId, data.receivedInBankAccountId], data.transferDate);
+  const lockedUntil = await findLockedUntil(
+  businessId,
+  [data.paidFromBankAccountId, data.receivedInBankAccountId],
+  data.transferDate,
+);
   if (lockedUntil) return { result: null, error: 'PERIOD_LOCKED' as const, lockedUntil };
 
   const reference = data.reference?.trim() || `TRF-${Date.now()}`;
@@ -156,7 +160,11 @@ export async function setTransferCleared(
 export async function deleteTransfer(businessId: string, transferId: string) {
   const transfer = await getTransferById(businessId, transferId);
   if (!transfer) return { deleted: false, lockedUntil: null };
-  const lockedUntil = await findLockedUntil([transfer.paidFromBankAccountId, transfer.receivedInBankAccountId], transfer.transferDate);
+  const lockedUntil = await findLockedUntil(
+  businessId,
+  [transfer.paidFromBankAccountId, transfer.receivedInBankAccountId],
+  transfer.transferDate,
+);
   if (lockedUntil) return { deleted: false, lockedUntil };
 
   const originalLines = await db
