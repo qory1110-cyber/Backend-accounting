@@ -169,6 +169,7 @@ export const salesInvoiceRoutesPlugin = async (fastify: FastifyInstance) => {
       const { result, error } = out;
       if (error === null && !result) return sendError(res, 404, 'NotFound', 'Faktur tidak ditemukan');
       if (error === 'STATUS_NOT_SENT') return sendError(res, 409, 'Conflict', "Cuma faktur berstatus 'sent' yang bisa di-void");
+      if (error === 'HAS_RECEIPTS') return sendError(res, 409, 'Conflict', 'Faktur ini sudah memiliki penerimaan pembayaran. Hapus Receipt-nya terlebih dahulu sebelum void');
       if (out.error === 'PERIOD_LOCKED') return sendError(res, 400, 'BadRequest', periodLockedMessage(out.lockedUntil, 'void'));
       return sendData(res, result);
     },

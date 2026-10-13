@@ -290,9 +290,17 @@ export async function voidSalesInvoice(businessId: string, salesInvoiceId: strin
   const invoice = await getSalesInvoiceById(businessId, salesInvoiceId);
   if (!invoice) return { result: null, error: null };
   if (invoice.status !== 'sent') return { result: null, error: 'STATUS_NOT_SENT' as const };
-  if (!invoice.journalEntryId) return { result: null, error: 'NO_JOURNAL' as const };
+    if (!invoice.journalEntryId) return { result: null, error: 'NO_JOURNAL' as const };
   const lockedUntil = await findLockedUntil(businessId, [], invoice.issueDate);
   if (lockedUntil) return { result: null, error: 'PERIOD_LOCKED' as const, lockedUntil };
+
+  // Faktur yang sudah dibayar tidak boleh di-void: jurnal penerimaannya akan menggantung.
+  const [existingReceipt] = await db
+    .select({ id: receiptLines.id })
+    .from(receiptLines)
+    .where(eq(receiptLines.salesInvoiceId, invoice.id))
+    .limit(1);
+  if (existingReceipt) return { result: null, error: 'HAS_RECEIPTS' as const };
 
   const originalLines = await db
     .select()

@@ -293,6 +293,14 @@ export async function voidPurchaseInvoice(businessId: string, purchaseInvoiceId:
   const lockedUntil = await findLockedUntil(businessId, [], invoice.issueDate);
   if (lockedUntil) return { result: null, error: 'PERIOD_LOCKED' as const, lockedUntil };
 
+  // Faktur yang sudah dibayar tidak boleh di-void: jurnal pembayarannya akan menggantung.
+  const [existingPayment] = await db
+    .select({ id: paymentLines.id })
+    .from(paymentLines)
+    .where(eq(paymentLines.purchaseInvoiceId, invoice.id))
+    .limit(1);
+  if (existingPayment) return { result: null, error: 'HAS_PAYMENTS' as const };
+
   const originalLines = await db
     .select()
     .from(journalEntryLines)

@@ -169,6 +169,7 @@ export const purchaseInvoiceRoutesPlugin = async (fastify: FastifyInstance) => {
       const { result, error } = out;
       if (error === null && !result) return sendError(res, 404, 'NotFound', 'Faktur pembelian tidak ditemukan');
       if (error === 'STATUS_NOT_APPROVED') return sendError(res, 409, 'Conflict', "Cuma faktur berstatus 'approved' yang bisa di-void");
+      if (error === 'HAS_PAYMENTS') return sendError(res, 409, 'Conflict', 'Faktur ini sudah memiliki pembayaran. Hapus pembayarannya terlebih dahulu sebelum void');
       if (out.error === 'PERIOD_LOCKED') return sendError(res, 400, 'BadRequest', periodLockedMessage(out.lockedUntil, 'void'));
       return sendData(res, result);
     },
