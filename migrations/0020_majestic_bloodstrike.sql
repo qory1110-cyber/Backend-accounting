@@ -1,0 +1,1 @@
+ALTER TABLE "purchase_invoice_lines" ADD COLUMN "line_no" integer DEFAULT 0 NOT NULL;

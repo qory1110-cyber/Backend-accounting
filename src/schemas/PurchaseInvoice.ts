@@ -2,12 +2,14 @@ import { z } from 'zod';
 import { IsoDateSchema } from './globals.js';
 
 export const PurchaseInvoiceLineSchema = z.object({
+  purchaseOrderLineId: z.string().uuid().optional(),
   accountId: z.string().uuid(),
   qty: z.coerce.number().positive(),
   unitPrice: z.coerce.number().min(0),
 });
 
 export const PurchaseInvoiceCreateSchema = z.object({
+  purchaseOrderId: z.string().uuid().optional(),
   supplierId: z.string().uuid(),
   issueDate: z.string(), // YYYY-MM-DD
   dueDate: z.string().optional(),
@@ -20,6 +22,7 @@ export const PurchaseInvoiceUpdateSchema = PurchaseInvoiceCreateSchema.partial()
 
 export const PurchaseInvoiceLineResponseSchema = z.object({
   id: z.string().uuid(),
+  purchaseOrderLineId: z.string().uuid().nullable(),
   accountId: z.string().uuid(),
   accountName: z.string(),
   qty: z.string(),
@@ -32,6 +35,9 @@ export const PurchaseInvoiceResponseSchema = z.object({
   businessId: z.string().uuid(),
   supplierId: z.string().uuid(),
   supplierName: z.string(),
+  purchaseOrderId: z.string().uuid().nullable(),
+  // Nomor referensi PO untuk kolom "Order number" di tampilan faktur.
+  purchaseOrderReference: z.string().nullable(),
   issueDate: z.string(),
   dueDate: z.string().nullable(),
   reference: z.string().nullable(),

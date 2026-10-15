@@ -8,6 +8,7 @@ import {
   boolean,
   numeric,
   jsonb,
+  integer,
   date,
   unique,
 } from 'drizzle-orm/pg-core';
@@ -207,6 +208,27 @@ export const salesInvoiceLines = pgTable('sales_invoice_lines', {
   unitPrice: numeric({ precision: 18, scale: 2 }).notNull(),
 });
 
+export const purchaseOrders = pgTable('purchase_orders', {
+  id: uuid().defaultRandom().primaryKey(),
+  businessId: uuid().notNull().references(() => businesses.id, { onDelete: 'cascade' }),
+  supplierId: uuid().notNull().references(() => contacts.id),
+  orderDate: date().notNull(),
+  reference: varchar({ length: 100 }),
+  billingAddress: text(),
+  description: text(),
+  createdAt: timestamp().notNull().defaultNow(),
+});
+
+export const purchaseOrderLines = pgTable('purchase_order_lines', {
+  id: uuid().defaultRandom().primaryKey(),
+  purchaseOrderId: uuid().notNull().references(() => purchaseOrders.id, { onDelete: 'cascade' }),
+  lineNo: integer().notNull().default(0), // urutan baris sesuai input
+  accountId: uuid().notNull().references(() => chartOfAccounts.id), // akun Expense
+  description: text(),
+  qty: numeric({ precision: 18, scale: 2 }).notNull(),
+  unitPrice: numeric({ precision: 18, scale: 2 }).notNull(),
+});
+
 export const purchaseInvoices = pgTable('purchase_invoices', {
   id: uuid().defaultRandom().primaryKey(),
   businessId: uuid().notNull().references(() => businesses.id, { onDelete: 'cascade' }),
@@ -217,12 +239,15 @@ export const purchaseInvoices = pgTable('purchase_invoices', {
   description: text(),
   status: purchaseInvoiceStatusEnum().notNull().default('draft'),
   journalEntryId: uuid().references(() => journalEntries.id), // diisi saat status jadi 'approved'
+  purchaseOrderId: uuid().references(() => purchaseOrders.id), // diisi bila faktur dibuat dari Purchase Order
 });
 
 export const purchaseInvoiceLines = pgTable('purchase_invoice_lines', {
   id: uuid().defaultRandom().primaryKey(),
   purchaseInvoiceId: uuid().notNull().references(() => purchaseInvoices.id, { onDelete: 'cascade' }),
   accountId: uuid().notNull().references(() => chartOfAccounts.id), // akun Expense
+  purchaseOrderLineId: uuid().references(() => purchaseOrderLines.id), // diisi bila baris berasal dari baris PO
+  lineNo: integer().notNull().default(0), // urutan baris dalam faktur
   qty: numeric({ precision: 18, scale: 2 }).notNull(),
   unitPrice: numeric({ precision: 18, scale: 2 }).notNull(),
 });

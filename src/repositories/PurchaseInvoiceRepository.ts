@@ -8,12 +8,14 @@ import {
   contacts,
   journalEntries,
   journalEntryLines,
+  purchaseOrders,
+  purchaseOrderLines,
 } from '../db/schema.js';
 import { findLockedUntil } from '../libs/period-lock.js';
 
 export class BusinessError extends Error {}
 
-type LineInput = { accountId: string; qty: number; unitPrice: number };
+type LineInput = { purchaseOrderLineId?: string; accountId: string; qty: number; unitPrice: number };
 
 async function findApControlAccount(businessId: string) {
   const [row] = await db
@@ -50,10 +52,45 @@ async function areValidExpenseAccounts(businessId: string, accountIds: string[])
   return rows.length === unique.length;
 }
 
+// Validasi tautan ke Purchase Order: PO harus milik bisnis ini, pemasoknya sama
+// dengan faktur, dan setiap purchaseOrderLineId harus baris milik PO tersebut.
+async function validatePurchaseOrderLink(
+  businessId: string,
+  supplierId: string,
+  purchaseOrderId: string | null | undefined,
+  poLineIds: (string | null | undefined)[],
+) {
+  const linkedLineIds = poLineIds.filter((id): id is string => !!id);
+
+  // Tanpa PO, tidak boleh ada baris yang menunjuk baris PO.
+  if (!purchaseOrderId) {
+    return linkedLineIds.length > 0 ? ('INVALID_PO_LINE' as const) : null;
+  }
+
+  const [po] = await db
+    .select({ supplierId: purchaseOrders.supplierId })
+    .from(purchaseOrders)
+    .where(and(eq(purchaseOrders.id, purchaseOrderId), eq(purchaseOrders.businessId, businessId)))
+    .limit(1);
+  if (!po) return 'INVALID_PURCHASE_ORDER' as const;
+  if (po.supplierId !== supplierId) return 'PO_SUPPLIER_MISMATCH' as const;
+
+  const unique = [...new Set(linkedLineIds)];
+  if (unique.length > 0) {
+    const rows = await db
+      .select({ id: purchaseOrderLines.id })
+      .from(purchaseOrderLines)
+      .where(and(inArray(purchaseOrderLines.id, unique), eq(purchaseOrderLines.purchaseOrderId, purchaseOrderId)));
+    if (rows.length !== unique.length) return 'INVALID_PO_LINE' as const;
+  }
+  return null;
+}
+
 async function attachComputedFields(invoice: typeof purchaseInvoices.$inferSelect) {
   const lines = await db
     .select({
       id: purchaseInvoiceLines.id,
+      purchaseOrderLineId: purchaseInvoiceLines.purchaseOrderLineId,
       accountId: purchaseInvoiceLines.accountId,
       accountName: chartOfAccounts.name,
       qty: purchaseInvoiceLines.qty,
@@ -61,7 +98,8 @@ async function attachComputedFields(invoice: typeof purchaseInvoices.$inferSelec
     })
     .from(purchaseInvoiceLines)
     .innerJoin(chartOfAccounts, eq(purchaseInvoiceLines.accountId, chartOfAccounts.id))
-    .where(eq(purchaseInvoiceLines.purchaseInvoiceId, invoice.id));
+    .where(eq(purchaseInvoiceLines.purchaseInvoiceId, invoice.id))
+    .orderBy(purchaseInvoiceLines.lineNo);
 
   const linesWithSubtotal = lines.map((l) => ({ ...l, subtotal: Number(l.qty) * Number(l.unitPrice) }));
   const invoiceAmount = linesWithSubtotal.reduce((sum, l) => sum + l.subtotal, 0);
@@ -88,8 +126,19 @@ if (invoice.status === 'approved') {
     .where(eq(contacts.id, invoice.supplierId))
     .limit(1);
 
+    let purchaseOrderReference: string | null = null;
+  if (invoice.purchaseOrderId) {
+    const [po] = await db
+      .select({ reference: purchaseOrders.reference })
+      .from(purchaseOrders)
+      .where(eq(purchaseOrders.id, invoice.purchaseOrderId))
+      .limit(1);
+    purchaseOrderReference = po?.reference ?? null;
+  }
+
   return {
     ...invoice,
+    purchaseOrderReference,
     supplierName: supplier?.name ?? '',
     lines: linesWithSubtotal,
     invoiceAmount,
@@ -127,7 +176,8 @@ export async function getPurchaseInvoiceById(businessId: string, purchaseInvoice
 
 export async function createPurchaseInvoice(
   businessId: string,
-  data: {
+    data: {
+    purchaseOrderId?: string;
     supplierId: string;
     issueDate: string;
     dueDate?: string;
@@ -141,9 +191,16 @@ export async function createPurchaseInvoice(
   if (!(await isValidSupplier(businessId, header.supplierId))) {
     return { result: null, error: 'INVALID_SUPPLIER' as const };
   }
-  if (!(await areValidExpenseAccounts(businessId, lines.map((l) => l.accountId)))) {
+    if (!(await areValidExpenseAccounts(businessId, lines.map((l) => l.accountId)))) {
     return { result: null, error: 'INVALID_ACCOUNT' as const };
   }
+  const poError = await validatePurchaseOrderLink(
+    businessId,
+    header.supplierId,
+    header.purchaseOrderId,
+    lines.map((l) => l.purchaseOrderLineId),
+  );
+  if (poError) return { result: null, error: poError };
 
   const id = await db.transaction(async (tx) => {
     const [invoice] = await tx
@@ -151,9 +208,11 @@ export async function createPurchaseInvoice(
       .values({ businessId, ...header } as typeof purchaseInvoices.$inferInsert)
       .returning();
 
-    await tx.insert(purchaseInvoiceLines).values(
-      lines.map((l) => ({
+        await tx.insert(purchaseInvoiceLines).values(
+      lines.map((l, index) => ({
+        lineNo: index + 1,
         purchaseInvoiceId: invoice.id,
+        purchaseOrderLineId: l.purchaseOrderLineId ?? null,
         accountId: l.accountId,
         qty: l.qty.toString(),
         unitPrice: l.unitPrice.toString(),
@@ -168,7 +227,8 @@ export async function createPurchaseInvoice(
 export async function updatePurchaseInvoice(
   businessId: string,
   purchaseInvoiceId: string,
-  data: Partial<{
+    data: Partial<{
+    purchaseOrderId: string;
     supplierId: string;
     issueDate: string;
     dueDate: string;
@@ -178,7 +238,11 @@ export async function updatePurchaseInvoice(
   }>,
 ) {
   const [existing] = await db
-    .select({ status: purchaseInvoices.status })
+        .select({
+      status: purchaseInvoices.status,
+      supplierId: purchaseInvoices.supplierId,
+      purchaseOrderId: purchaseInvoices.purchaseOrderId,
+    })
     .from(purchaseInvoices)
     .where(and(eq(purchaseInvoices.id, purchaseInvoiceId), eq(purchaseInvoices.businessId, businessId)))
     .limit(1);
@@ -191,8 +255,28 @@ export async function updatePurchaseInvoice(
   if (header.supplierId && !(await isValidSupplier(businessId, header.supplierId))) {
     return { result: null, error: 'INVALID_SUPPLIER' as const };
   }
-  if (lines && !(await areValidExpenseAccounts(businessId, lines.map((l) => l.accountId)))) {
+    if (lines && !(await areValidExpenseAccounts(businessId, lines.map((l) => l.accountId)))) {
     return { result: null, error: 'INVALID_ACCOUNT' as const };
+  }
+
+  // Cek ulang tautan PO kalau pemasok, PO, atau baris berubah. Kalau baris tidak
+  // dikirim, pakai tautan baris yang sudah tersimpan.
+  if (header.supplierId || header.purchaseOrderId || lines) {
+    const effectiveLineIds = lines
+      ? lines.map((l) => l.purchaseOrderLineId)
+      : (
+          await db
+            .select({ id: purchaseInvoiceLines.purchaseOrderLineId })
+            .from(purchaseInvoiceLines)
+            .where(eq(purchaseInvoiceLines.purchaseInvoiceId, purchaseInvoiceId))
+        ).map((r) => r.id);
+    const poError = await validatePurchaseOrderLink(
+      businessId,
+      header.supplierId ?? existing.supplierId,
+      header.purchaseOrderId ?? existing.purchaseOrderId,
+      effectiveLineIds,
+    );
+    if (poError) return { result: null, error: poError };
   }
 
   await db.transaction(async (tx) => {
@@ -202,8 +286,10 @@ export async function updatePurchaseInvoice(
     if (lines) {
       await tx.delete(purchaseInvoiceLines).where(eq(purchaseInvoiceLines.purchaseInvoiceId, purchaseInvoiceId));
       await tx.insert(purchaseInvoiceLines).values(
-        lines.map((l) => ({
+        lines.map((l, index) => ({
+          lineNo: index + 1,
           purchaseInvoiceId,
+          purchaseOrderLineId: l.purchaseOrderLineId ?? null,
           accountId: l.accountId,
           qty: l.qty.toString(),
           unitPrice: l.unitPrice.toString(),

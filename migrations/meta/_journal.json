@@ -127,6 +127,27 @@
       "when": 1791860058888,
       "tag": "0017_nostalgic_sister_grimm",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791952559365,
+      "tag": "0018_closed_tomorrow_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791959775326,
+      "tag": "0019_panoramic_gideon",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792033109931,
+      "tag": "0020_majestic_bloodstrike",
+      "breakpoints": true
     }
   ]
 }

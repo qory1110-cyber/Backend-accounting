@@ -77,6 +77,9 @@ export const purchaseInvoiceRoutesPlugin = async (fastify: FastifyInstance) => {
       const { result, error } = await createPurchaseInvoice(req.params.businessId, req.body);
       if (error === 'INVALID_SUPPLIER') return sendError(res, 400, 'BadRequest', 'Pemasok tidak valid atau bukan pemasok di bisnis ini');
       if (error === 'INVALID_ACCOUNT') return sendError(res, 400, 'BadRequest', 'Semua akun rincian harus bertipe Expense di bisnis ini');
+      if (error === 'INVALID_PURCHASE_ORDER') return sendError(res, 400, 'BadRequest', 'Purchase Order tidak ditemukan di bisnis ini');
+      if (error === 'PO_SUPPLIER_MISMATCH') return sendError(res, 400, 'BadRequest', 'Pemasok faktur harus sama dengan pemasok pada Purchase Order');
+      if (error === 'INVALID_PO_LINE') return sendError(res, 400, 'BadRequest', 'Baris rincian menunjuk baris Purchase Order yang tidak valid');
       return sendData(res, result, 201);
     },
   });
@@ -113,6 +116,9 @@ export const purchaseInvoiceRoutesPlugin = async (fastify: FastifyInstance) => {
       if (error === 'NOT_DRAFT') return sendError(res, 409, 'Conflict', 'Faktur yang sudah disetujui tidak bisa diedit');
       if (error === 'INVALID_SUPPLIER') return sendError(res, 400, 'BadRequest', 'Pemasok tidak valid atau bukan pemasok di bisnis ini');
       if (error === 'INVALID_ACCOUNT') return sendError(res, 400, 'BadRequest', 'Semua akun rincian harus bertipe Expense di bisnis ini');
+      if (error === 'INVALID_PURCHASE_ORDER') return sendError(res, 400, 'BadRequest', 'Purchase Order tidak ditemukan di bisnis ini');
+      if (error === 'PO_SUPPLIER_MISMATCH') return sendError(res, 400, 'BadRequest', 'Pemasok faktur harus sama dengan pemasok pada Purchase Order');
+      if (error === 'INVALID_PO_LINE') return sendError(res, 400, 'BadRequest', 'Baris rincian menunjuk baris Purchase Order yang tidak valid');
       return sendData(res, result);
     },
   });
