@@ -289,6 +289,38 @@ export const paymentLines = pgTable('payment_lines', {
   paymentId: uuid().notNull().references(() => payments.id, { onDelete: 'cascade' }),
   accountId: uuid().notNull().references(() => chartOfAccounts.id),
   purchaseInvoiceId: uuid().references(() => purchaseInvoices.id), // diisi kalau baris ini melunasi faktur
+  expenseClaimId: uuid().references(() => expenseClaims.id), // diisi kalau baris ini melunasi klaim biaya
+  amount: numeric({ precision: 18, scale: 2 }).notNull(),
+});
+
+export const expenseClaimPayers = pgTable('expense_claim_payers', {
+  id: uuid().defaultRandom().primaryKey(),
+  businessId: uuid().notNull().references(() => businesses.id, { onDelete: 'cascade' }),
+  contactId: uuid().notNull().unique().references(() => contacts.id), // kontak tersembunyi (bukan customer/supplier) untuk Payments & jurnal
+  name: varchar({ length: 225 }).notNull(),
+  isActive: boolean().notNull().default(true),
+  createdAt: timestamp().notNull().defaultNow(),
+  updatedAt: timestamp().notNull().defaultNow(),
+});
+
+export const expenseClaims = pgTable('expense_claims', {
+  id: uuid().defaultRandom().primaryKey(),
+  businessId: uuid().notNull().references(() => businesses.id, { onDelete: 'cascade' }),
+  claimDate: date().notNull(),
+  reference: varchar({ length: 100 }),
+  payerId: uuid().notNull().references(() => expenseClaimPayers.id),
+  payee: varchar({ length: 225 }), // teks bebas: tempat/pihak tujuan pengeluaran (mis. SPBU)
+  description: text(),
+  journalEntryId: uuid().notNull().references(() => journalEntries.id),
+  createdAt: timestamp().notNull().defaultNow(),
+});
+
+export const expenseClaimLines = pgTable('expense_claim_lines', {
+  id: uuid().defaultRandom().primaryKey(),
+  expenseClaimId: uuid().notNull().references(() => expenseClaims.id, { onDelete: 'cascade' }),
+  lineNo: integer().notNull().default(0),
+  accountId: uuid().notNull().references(() => chartOfAccounts.id), // akun beban/aset
+  description: text(),
   amount: numeric({ precision: 18, scale: 2 }).notNull(),
 });
 

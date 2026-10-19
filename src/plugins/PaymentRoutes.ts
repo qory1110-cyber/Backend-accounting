@@ -78,9 +78,11 @@ export const paymentRoutesPlugin = async (fastify: FastifyInstance) => {
       if (error === 'INVALID_PAYEE') return sendError(res, 400, 'BadRequest', 'Payee tidak valid di bisnis ini');
       if (error === 'NO_AP_ACCOUNT') return sendError(res, 400, 'BadRequest', 'Akun Utang Usaha (kode 2000) tidak ditemukan');
       if (error === 'INVALID_INVOICE') return sendError(res, 400, 'BadRequest', 'Faktur tidak valid atau bukan berstatus approved');
-      if (error === 'OVERPAYMENT') return sendError(res, 400, 'BadRequest', 'Jumlah melebihi sisa tagihan faktur');
+      if (error === 'INVALID_CLAIM') return sendError(res, 400, 'BadRequest', 'Klaim biaya tidak valid di bisnis ini');
+      if (error === 'CLAIM_PAYEE_MISMATCH') return sendError(res, 400, 'BadRequest', 'Payee pembayaran harus Payer pemilik klaim biaya tersebut');
+      if (error === 'OVERPAYMENT') return sendError(res, 400, 'BadRequest', 'Jumlah melebihi sisa tagihan faktur/klaim');
       if (error === 'INVALID_ACCOUNT') return sendError(res, 400, 'BadRequest', 'Akun GL tidak valid di bisnis ini');
-            if (error === 'ACCOUNT_SAME_AS_BANK') return sendError(res, 400, 'BadRequest', 'Akun pada baris tidak boleh sama dengan akun kontrol bank. Pilih akun tujuan, misalnya Beban atau Utang Usaha');
+      if (error === 'ACCOUNT_SAME_AS_BANK') return sendError(res, 400, 'BadRequest', 'Akun pada baris tidak boleh sama dengan akun kontrol bank. Pilih akun tujuan, misalnya Beban atau Utang Usaha');
       return sendData(res, result, 201);
     },
   });

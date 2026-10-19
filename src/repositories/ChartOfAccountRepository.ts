@@ -126,6 +126,7 @@ const DEFAULT_CHART_OF_ACCOUNTS = [
   { code: '1400', name: 'Persediaan', category: 'Asset' as const },
   { code: '1500', name: 'Aset Tetap', category: 'Asset' as const },
   { code: '2000', name: 'Utang Usaha', category: 'Liability' as const },
+  { code: '2050', name: 'Utang Klaim Biaya', category: 'Liability' as const },
   { code: '2100', name: 'Utang Pajak', category: 'Liability' as const },
   { code: '3000', name: 'Modal Pemilik', category: 'Equity' as const },
   { code: '3900', name: 'Laba Ditahan', category: 'Equity' as const },

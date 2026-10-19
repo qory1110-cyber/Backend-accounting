@@ -7,12 +7,16 @@ import {
   chartOfAccounts,
   contacts,
   purchaseInvoices,
+  expenseClaims,
+  expenseClaimLines,
+  expenseClaimPayers,
   journalEntries,
   journalEntryLines,
 } from '../db/schema.js';
 import { findLockedUntil } from '../libs/period-lock.js';
+import { ensureExpenseClaimAccount } from './ExpenseClaimRepository.js';
 
-type LineInput = { amount: number; purchaseInvoiceId?: string; accountId?: string };
+type LineInput = { amount: number; purchaseInvoiceId?: string; expenseClaimId?: string; accountId?: string };
 
 async function findApControlAccount(businessId: string) {
   const [row] = await db
@@ -55,6 +59,29 @@ async function getPurchaseInvoiceRemainingBalance(businessId: string, purchaseIn
   return { supplierId: invoice.supplierId, remaining: invoiceAmount - Number(paid.total) };
 }
 
+// Sisa saldo klaim = total baris klaim - Σ(baris Payment yang sudah melunasinya).
+async function getExpenseClaimRemainingBalance(businessId: string, expenseClaimId: string) {
+  const [row] = await db
+    .select({ payerContactId: expenseClaimPayers.contactId })
+    .from(expenseClaims)
+    .innerJoin(expenseClaimPayers, eq(expenseClaims.payerId, expenseClaimPayers.id))
+    .where(and(eq(expenseClaims.id, expenseClaimId), eq(expenseClaims.businessId, businessId)))
+    .limit(1);
+  if (!row) return null;
+
+  const [total] = await db
+    .select({ total: sql<string>`COALESCE(SUM(${expenseClaimLines.amount}), 0)` })
+    .from(expenseClaimLines)
+    .where(eq(expenseClaimLines.expenseClaimId, expenseClaimId));
+
+  const [paid] = await db
+    .select({ total: sql<string>`COALESCE(SUM(${paymentLines.amount}), 0)` })
+    .from(paymentLines)
+    .where(eq(paymentLines.expenseClaimId, expenseClaimId));
+
+  return { payerContactId: row.payerContactId, remaining: Number(total.total) - Number(paid.total) };
+}
+
 async function attachDetail(payment: typeof payments.$inferSelect) {
   const lines = await db
     .select({
@@ -63,11 +90,14 @@ async function attachDetail(payment: typeof payments.$inferSelect) {
       accountName: chartOfAccounts.name,
       purchaseInvoiceId: paymentLines.purchaseInvoiceId,
       purchaseInvoiceReference: purchaseInvoices.reference,
+      expenseClaimId: paymentLines.expenseClaimId,
+      expenseClaimReference: expenseClaims.reference,
       amount: paymentLines.amount,
     })
     .from(paymentLines)
     .innerJoin(chartOfAccounts, eq(paymentLines.accountId, chartOfAccounts.id))
     .leftJoin(purchaseInvoices, eq(paymentLines.purchaseInvoiceId, purchaseInvoices.id))
+    .leftJoin(expenseClaims, eq(paymentLines.expenseClaimId, expenseClaims.id))
     .where(eq(paymentLines.paymentId, payment.id));
 
   const totalAmount = lines.reduce((sum, l) => sum + Number(l.amount), 0);
@@ -154,9 +184,32 @@ export async function createPayment(
 
   const apAccount = await findApControlAccount(businessId);
 
-  const resolvedLines: { accountId: string; purchaseInvoiceId?: string; contactId?: string; amount: number }[] = [];
+  const resolvedLines: {
+    accountId: string;
+    purchaseInvoiceId?: string;
+    expenseClaimId?: string;
+    contactId?: string;
+    amount: number;
+  }[] = [];
+  const claimAllocated = new Map<string, number>(); // total alokasi per klaim dalam satu Payment
   for (const line of data.lines) {
-    if (line.purchaseInvoiceId) {
+    if (line.expenseClaimId) {
+      const claimInfo = await getExpenseClaimRemainingBalance(businessId, line.expenseClaimId);
+      if (!claimInfo) return { result: null, error: 'INVALID_CLAIM' as const };
+      if (claimInfo.payerContactId !== data.payeeContactId) {
+        return { result: null, error: 'CLAIM_PAYEE_MISMATCH' as const };
+      }
+      const allocated = (claimAllocated.get(line.expenseClaimId) ?? 0) + line.amount;
+      if (allocated > claimInfo.remaining + 0.01) return { result: null, error: 'OVERPAYMENT' as const };
+      claimAllocated.set(line.expenseClaimId, allocated);
+      const claimAccount = await ensureExpenseClaimAccount(businessId);
+      resolvedLines.push({
+        accountId: claimAccount.id,
+        expenseClaimId: line.expenseClaimId,
+        contactId: claimInfo.payerContactId,
+        amount: line.amount,
+      });
+    } else if (line.purchaseInvoiceId) {
       if (!apAccount) return { result: null, error: 'NO_AP_ACCOUNT' as const };
       const invoiceInfo = await getPurchaseInvoiceRemainingBalance(businessId, line.purchaseInvoiceId);
 if (!invoiceInfo) return { result: null, error: 'INVALID_INVOICE' as const };
@@ -241,6 +294,7 @@ for (const { accountId, contactId, amount } of grouped.values()) {
         paymentId: payment.id,
         accountId: l.accountId,
         purchaseInvoiceId: l.purchaseInvoiceId,
+        expenseClaimId: l.expenseClaimId,
         amount: l.amount.toString(),
       })),
     );

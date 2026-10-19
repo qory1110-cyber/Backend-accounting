@@ -5,11 +5,18 @@ export const PaymentLineSchema = z.object({
   amount: z.coerce.number().positive(),
   // Isi purchaseInvoiceId untuk melunasi faktur (accountId diabaikan, dipaksa
   // ke Utang Usaha). Kosongkan dan isi accountId untuk posting langsung ke GL.
-  purchaseInvoiceId: z.string().uuid().optional(),
+    purchaseInvoiceId: z.string().uuid().optional(),
+  // Isi expenseClaimId untuk melunasi klaim biaya (accountId diabaikan, dipaksa
+  // ke Utang Klaim Biaya). Payee harus Payer pemilik klaim.
+  expenseClaimId: z.string().uuid().optional(),
   accountId: z.string().uuid().optional(),
-}).refine((l) => l.purchaseInvoiceId || l.accountId, {
-  message: 'Isi purchaseInvoiceId atau accountId',
-});
+})
+  .refine((l) => l.purchaseInvoiceId || l.expenseClaimId || l.accountId, {
+    message: 'Isi purchaseInvoiceId, expenseClaimId, atau accountId',
+  })
+  .refine((l) => !(l.purchaseInvoiceId && l.expenseClaimId), {
+    message: 'Satu baris tidak boleh melunasi faktur dan klaim sekaligus',
+  });
 
 export const PaymentCreateSchema = z.object({
   paymentDate: IsoDateSchema,
@@ -26,6 +33,8 @@ export const PaymentLineResponseSchema = z.object({
   accountName: z.string(),
   purchaseInvoiceId: z.string().uuid().nullable(),
   purchaseInvoiceReference: z.string().nullable(),
+  expenseClaimId: z.string().uuid().nullable(),
+  expenseClaimReference: z.string().nullable(),
   amount: z.string(),
 });
 
