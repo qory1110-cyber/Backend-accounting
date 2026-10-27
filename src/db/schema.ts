@@ -27,6 +27,7 @@ export const accountCategoryEnum = pgEnum('account_category', ['Asset', 'Liabili
 export const auditActionEnum = pgEnum('audit_action', ['CREATE', 'UPDATE', 'DELETE']);
 export const salesInvoiceStatusEnum = pgEnum('sales_invoice_status', ['draft', 'sent', 'void']);
 export const purchaseInvoiceStatusEnum = pgEnum('purchase_invoice_status', ['draft', 'approved', 'void']);
+export const projectStatusEnum = pgEnum('project_status', ['active', 'inactive', 'completed']);
 
 // --- Bisnis & Pengguna (Multi-Tenant & Access) ------------------------------
 
@@ -147,6 +148,7 @@ export const journalEntryLines = pgTable('journal_entry_lines', {
     .notNull()
     .references(() => chartOfAccounts.id),
   contactId: uuid().references(() => contacts.id),
+  projectId: uuid().references(() => projects.id), // tag proyek (opsional), dasar laba-rugi per proyek
   currencyCode: varchar({ length: 3 }).notNull().default('IDR'),
   exchangeRate: numeric({ precision: 12, scale: 6 }).notNull().default('1.000000'),
   amountForeign: numeric({ precision: 18, scale: 2 }).notNull().default('0.00'),
@@ -203,6 +205,7 @@ export const salesInvoices = pgTable('sales_invoices', {
 export const salesInvoiceLines = pgTable('sales_invoice_lines', {
   id: uuid().defaultRandom().primaryKey(),
   salesInvoiceId: uuid().notNull().references(() => salesInvoices.id, { onDelete: 'cascade' }),
+  projectId: uuid().references(() => projects.id),
   accountId: uuid().notNull().references(() => chartOfAccounts.id), // akun Income
   qty: numeric({ precision: 18, scale: 2 }).notNull(),
   unitPrice: numeric({ precision: 18, scale: 2 }).notNull(),
@@ -247,6 +250,7 @@ export const purchaseInvoiceLines = pgTable('purchase_invoice_lines', {
   purchaseInvoiceId: uuid().notNull().references(() => purchaseInvoices.id, { onDelete: 'cascade' }),
   accountId: uuid().notNull().references(() => chartOfAccounts.id), // akun Expense
   purchaseOrderLineId: uuid().references(() => purchaseOrderLines.id), // diisi bila baris berasal dari baris PO
+  projectId: uuid().references(() => projects.id), // tag proyek (opsional)
   lineNo: integer().notNull().default(0), // urutan baris dalam faktur
   qty: numeric({ precision: 18, scale: 2 }).notNull(),
   unitPrice: numeric({ precision: 18, scale: 2 }).notNull(),
@@ -269,6 +273,7 @@ export const receiptLines = pgTable('receipt_lines', {
   receiptId: uuid().notNull().references(() => receipts.id, { onDelete: 'cascade' }),
   accountId: uuid().notNull().references(() => chartOfAccounts.id),
   salesInvoiceId: uuid().references(() => salesInvoices.id), // diisi kalau baris ini melunasi faktur
+  projectId: uuid().references(() => projects.id),
   amount: numeric({ precision: 18, scale: 2 }).notNull(),
 });
 
@@ -290,6 +295,7 @@ export const paymentLines = pgTable('payment_lines', {
   accountId: uuid().notNull().references(() => chartOfAccounts.id),
   purchaseInvoiceId: uuid().references(() => purchaseInvoices.id), // diisi kalau baris ini melunasi faktur
   expenseClaimId: uuid().references(() => expenseClaims.id), // diisi kalau baris ini melunasi klaim biaya
+  projectId: uuid().references(() => projects.id),
   amount: numeric({ precision: 18, scale: 2 }).notNull(),
 });
 
@@ -320,6 +326,7 @@ export const expenseClaimLines = pgTable('expense_claim_lines', {
   expenseClaimId: uuid().notNull().references(() => expenseClaims.id, { onDelete: 'cascade' }),
   lineNo: integer().notNull().default(0),
   accountId: uuid().notNull().references(() => chartOfAccounts.id), // akun beban/aset
+  projectId: uuid().references(() => projects.id), // tag proyek (opsional)
   description: text(),
   amount: numeric({ precision: 18, scale: 2 }).notNull(),
 });
@@ -344,6 +351,17 @@ export const bankReconciliations = pgTable('bank_reconciliations', {
   bankAccountId: uuid().notNull().references(() => bankAccounts.id),
   reconciliationDate: date().notNull(),
   statementBalance: numeric({ precision: 18, scale: 2 }).notNull(),
+  createdAt: timestamp().notNull().defaultNow(),
+  updatedAt: timestamp().notNull().defaultNow(),
+});
+
+export const projects = pgTable('projects', {
+  id: uuid().defaultRandom().primaryKey(),
+  businessId: uuid().notNull().references(() => businesses.id, { onDelete: 'cascade' }),
+  code: varchar({ length: 50 }),
+  name: varchar({ length: 225 }).notNull(),
+  customerId: uuid().references(() => contacts.id), // pelanggan pemilik proyek (opsional)
+  status: projectStatusEnum().notNull().default('active'),
   createdAt: timestamp().notNull().defaultNow(),
   updatedAt: timestamp().notNull().defaultNow(),
 });

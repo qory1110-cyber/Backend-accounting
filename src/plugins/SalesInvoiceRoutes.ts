@@ -65,6 +65,8 @@ export const salesInvoiceRoutesPlugin = async (fastify: FastifyInstance) => {
       const { result, error } = await createSalesInvoice(req.params.businessId, req.body);
       if (error === 'INVALID_CUSTOMER') return sendError(res, 400, 'BadRequest', 'Pelanggan tidak valid atau bukan pelanggan di bisnis ini');
       if (error === 'INVALID_ACCOUNT') return sendError(res, 400, 'BadRequest', 'Semua akun rincian harus bertipe Income di bisnis ini');
+      if (error === 'INVALID_PROJECT') return sendError(res, 400, 'BadRequest', 'Proyek pada baris tidak valid di bisnis ini');
+      if (error === 'INACTIVE_PROJECT') return sendError(res, 400, 'BadRequest', 'Proyek berstatus Inactive atau Completed, pilih proyek yang Active');
       return sendData(res, result, 201);
     },
   });
@@ -113,6 +115,8 @@ export const salesInvoiceRoutesPlugin = async (fastify: FastifyInstance) => {
       if (error === 'NOT_DRAFT') return sendError(res, 409, 'Conflict', 'Faktur yang sudah dikirim tidak bisa diedit');
       if (error === 'INVALID_CUSTOMER') return sendError(res, 400, 'BadRequest', 'Pelanggan tidak valid atau bukan pelanggan di bisnis ini');
       if (error === 'INVALID_ACCOUNT') return sendError(res, 400, 'BadRequest', 'Semua akun rincian harus bertipe Income di bisnis ini');
+      if (error === 'INVALID_PROJECT') return sendError(res, 400, 'BadRequest', 'Proyek pada baris tidak valid di bisnis ini');
+      if (error === 'INACTIVE_PROJECT') return sendError(res, 400, 'BadRequest', 'Proyek berstatus Inactive atau Completed, pilih proyek yang Active');
       return sendData(res, result);
     },
   });

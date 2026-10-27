@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import db from '../db/index.js';
 import {
   receipts,
@@ -9,10 +9,24 @@ import {
   salesInvoices,
   journalEntries,
   journalEntryLines,
+  projects,
 } from '../db/schema.js';
 import { findLockedUntil } from '../libs/period-lock.js';
 
-type LineInput = { amount: number; salesInvoiceId?: string; accountId?: string };
+type LineInput = { amount: number; salesInvoiceId?: string; accountId?: string; projectId?: string };
+
+// Proyek baris: harus milik bisnis ini dan berstatus Active.
+async function validateProjects(businessId: string, projectIds: (string | null | undefined)[]) {
+  const unique = [...new Set(projectIds.filter((id): id is string => !!id))];
+  if (unique.length === 0) return null;
+  const rows = await db
+    .select({ id: projects.id, status: projects.status })
+    .from(projects)
+    .where(and(eq(projects.businessId, businessId), inArray(projects.id, unique)));
+  if (rows.length !== unique.length) return 'INVALID_PROJECT' as const;
+  if (rows.some((p) => p.status !== 'active')) return 'INACTIVE_PROJECT' as const;
+  return null;
+}
 
 async function findArControlAccount(businessId: string) {
   const [row] = await db
@@ -65,10 +79,13 @@ async function attachDetail(receipt: typeof receipts.$inferSelect) {
       salesInvoiceId: receiptLines.salesInvoiceId,
       salesInvoiceReference: salesInvoices.reference,
       amount: receiptLines.amount,
+      projectId: receiptLines.projectId,
+      projectName: projects.name,
     })
     .from(receiptLines)
     .innerJoin(chartOfAccounts, eq(receiptLines.accountId, chartOfAccounts.id))
     .leftJoin(salesInvoices, eq(receiptLines.salesInvoiceId, salesInvoices.id))
+    .leftJoin(projects, eq(receiptLines.projectId, projects.id))
     .where(eq(receiptLines.receiptId, receipt.id));
 
   const totalAmount = lines.reduce((sum, l) => sum + Number(l.amount), 0);
@@ -153,7 +170,13 @@ export async function createReceipt(
 
   const arAccount = await findArControlAccount(businessId);
 
-  const resolvedLines: { accountId: string; salesInvoiceId?: string; contactId?: string; amount: number }[] = [];
+  const resolvedLines: {
+    accountId: string;
+    salesInvoiceId?: string;
+    contactId?: string;
+    projectId?: string;
+    amount: number;
+  }[] = [];
   for (const line of data.lines) {
     if (line.salesInvoiceId) {
       if (!arAccount) return { result: null, error: 'NO_AR_ACCOUNT' as const };
@@ -177,7 +200,12 @@ export async function createReceipt(
       if (account.id === bankAccount.controlAccountId) {
         return { result: null, error: 'ACCOUNT_SAME_AS_BANK' as const };
       }
-      resolvedLines.push({ accountId: line.accountId!, contactId: data.paidByContactId, amount: line.amount });
+      resolvedLines.push({
+        accountId: line.accountId!,
+        contactId: data.paidByContactId,
+        projectId: line.projectId,
+        amount: line.amount,
+      });
     }
   }
 
@@ -192,6 +220,9 @@ export async function createReceipt(
   // Baris debit bank membawa kontak hanya kalau seluruh receipt hanya melibatkan satu pihak.
   const distinctContacts = new Set(resolvedLines.map((l) => l.contactId).filter((c): c is string => !!c));
   const bankLineContactId = distinctContacts.size <= 1 ? effectivePayerId : undefined;
+
+  const projectError = await validateProjects(businessId, resolvedLines.map((l) => l.projectId));
+  if (projectError) return { result: null, error: projectError };
 
   const reference = data.reference?.trim() || `REC-${Date.now()}`;
   const totalAmount = resolvedLines.reduce((sum, l) => sum + l.amount, 0);
@@ -217,18 +248,24 @@ export async function createReceipt(
 
     // Kredit dikelompokkan per PASANGAN akun + kontak, supaya piutang tiap
     // pelanggan tercatat atas namanya sendiri.
-    const grouped = new Map<string, { accountId: string; contactId?: string; amount: number }>();
+    const grouped = new Map<string, { accountId: string; contactId?: string; projectId?: string; amount: number }>();
     for (const l of resolvedLines) {
-      const key = `${l.accountId}:${l.contactId ?? ''}`;
-      const entry = grouped.get(key) ?? { accountId: l.accountId, contactId: l.contactId, amount: 0 };
+      const key = `${l.accountId}:${l.contactId ?? ''}:${l.projectId ?? ''}`;
+      const entry = grouped.get(key) ?? {
+        accountId: l.accountId,
+        contactId: l.contactId,
+        projectId: l.projectId,
+        amount: 0,
+      };
       entry.amount += l.amount;
       grouped.set(key, entry);
     }
-    for (const { accountId, contactId, amount } of grouped.values()) {
+    for (const { accountId, contactId, projectId, amount } of grouped.values()) {
       await tx.insert(journalEntryLines).values({
         journalEntryId: journalEntry.id,
         accountId,
         contactId,
+        projectId,
         debit: '0.00',
         credit: amount.toString(),
       });
@@ -252,6 +289,7 @@ export async function createReceipt(
         receiptId: receipt.id,
         accountId: l.accountId,
         salesInvoiceId: l.salesInvoiceId,
+        projectId: l.projectId ?? null,
         amount: l.amount.toString(),
       })),
     );
@@ -293,6 +331,7 @@ export async function deleteReceipt(businessId: string, receiptId: string) {
         journalEntryId: reversal.id,
         accountId: line.accountId,
         contactId: line.contactId,
+        projectId: line.projectId,
         debit: line.credit,
         credit: line.debit,
       });

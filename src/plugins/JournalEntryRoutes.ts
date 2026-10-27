@@ -80,6 +80,8 @@ export const journalEntryRoutesPlugin = async (fastify: FastifyInstance) => {
       }
       if (error === 'UNBALANCED') return sendError(res, 400, 'BadRequest', 'Total Debit harus sama dengan Total Credit');
       if (error === 'INVALID_ACCOUNT') return sendError(res, 400, 'BadRequest', 'Akun tidak valid atau tidak aktif di bisnis ini');
+      if (error === 'INVALID_PROJECT') return sendError(res, 400, 'BadRequest', 'Proyek pada baris tidak valid di bisnis ini');
+      if (error === 'INACTIVE_PROJECT') return sendError(res, 400, 'BadRequest', 'Proyek berstatus Inactive atau Completed, pilih proyek yang Active');
       return sendData(res, result, 201);
     },
   });

@@ -61,6 +61,8 @@ export const expenseClaimRoutesPlugin = async (fastify: FastifyInstance) => {
       if (out.error === 'INVALID_PAYER') return sendError(res, 400, 'BadRequest', 'Payer tidak valid di bisnis ini');
       if (out.error === 'INACTIVE_PAYER') return sendError(res, 400, 'BadRequest', 'Payer berstatus Inactive, aktifkan dulu atau pilih Payer lain');
       if (out.error === 'INVALID_ACCOUNT') return sendError(res, 400, 'BadRequest', 'Akun baris harus akun Beban/Aset yang aktif di bisnis ini dan bukan akun bank/kas');
+      if (out.error === 'INVALID_PROJECT') return sendError(res, 400, 'BadRequest', 'Proyek pada baris tidak valid di bisnis ini');
+      if (out.error === 'INACTIVE_PROJECT') return sendError(res, 400, 'BadRequest', 'Proyek berstatus Inactive atau Completed, pilih proyek yang Active');
       if (out.error === 'PERIOD_LOCKED') return sendError(res, 400, 'BadRequest', periodLockedMessage(out.lockedUntil, 'create'));
       return sendData(res, out.result, 201);
     },

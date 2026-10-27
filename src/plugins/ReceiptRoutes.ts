@@ -73,6 +73,8 @@ export const receiptRoutesPlugin = async (fastify: FastifyInstance) => {
       if (error === 'INVALID_INVOICE') return sendError(res, 400, 'BadRequest', 'Faktur tidak valid atau bukan berstatus sent');
       if (error === 'OVERPAYMENT') return sendError(res, 400, 'BadRequest', 'Jumlah melebihi sisa tagihan faktur');
       if (error === 'INVALID_ACCOUNT') return sendError(res, 400, 'BadRequest', 'Akun GL tidak valid di bisnis ini');
+      if (error === 'INVALID_PROJECT') return sendError(res, 400, 'BadRequest', 'Proyek pada baris tidak valid di bisnis ini');
+      if (error === 'INACTIVE_PROJECT') return sendError(res, 400, 'BadRequest', 'Proyek berstatus Inactive atau Completed, pilih proyek yang Active');
       if (error === 'ACCOUNT_SAME_AS_BANK') return sendError(res, 400, 'BadRequest', 'Akun pada baris tidak boleh sama dengan akun kontrol bank. Pilih akun sumber, misalnya Pendapatan atau Piutang Usaha');
       return sendData(res, result, 201);
     },

@@ -7,6 +7,8 @@ export const ReceiptLineSchema = z.object({
   // Kosongkan salesInvoiceId dan isi accountId untuk posting langsung ke GL.
   salesInvoiceId: z.string().uuid().optional(),
   accountId: z.string().uuid().optional(),
+  // Hanya dipakai untuk baris posting langsung ke GL; diabaikan kalau melunasi faktur.
+  projectId: z.string().uuid().optional(),
 }).refine((l) => l.salesInvoiceId || l.accountId, {
   message: 'Isi salesInvoiceId atau accountId',
 });
@@ -24,6 +26,8 @@ export const ReceiptLineResponseSchema = z.object({
   id: z.string().uuid(),
   accountId: z.string().uuid(),
   accountName: z.string(),
+  projectId: z.string().uuid().nullable(),
+  projectName: z.string().nullable(),
   salesInvoiceId: z.string().uuid().nullable(),
   salesInvoiceReference: z.string().nullable(),
   amount: z.string(),

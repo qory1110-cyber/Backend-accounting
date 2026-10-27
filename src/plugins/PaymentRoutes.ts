@@ -82,6 +82,8 @@ export const paymentRoutesPlugin = async (fastify: FastifyInstance) => {
       if (error === 'CLAIM_PAYEE_MISMATCH') return sendError(res, 400, 'BadRequest', 'Payee pembayaran harus Payer pemilik klaim biaya tersebut');
       if (error === 'OVERPAYMENT') return sendError(res, 400, 'BadRequest', 'Jumlah melebihi sisa tagihan faktur/klaim');
       if (error === 'INVALID_ACCOUNT') return sendError(res, 400, 'BadRequest', 'Akun GL tidak valid di bisnis ini');
+      if (error === 'INVALID_PROJECT') return sendError(res, 400, 'BadRequest', 'Proyek pada baris tidak valid di bisnis ini');
+      if (error === 'INACTIVE_PROJECT') return sendError(res, 400, 'BadRequest', 'Proyek berstatus Inactive atau Completed, pilih proyek yang Active');
       if (error === 'ACCOUNT_SAME_AS_BANK') return sendError(res, 400, 'BadRequest', 'Akun pada baris tidak boleh sama dengan akun kontrol bank. Pilih akun tujuan, misalnya Beban atau Utang Usaha');
       return sendData(res, result, 201);
     },

@@ -9,6 +9,7 @@ import {
   bankAccounts,
   journalEntries,
   journalEntryLines,
+  projects,
 } from '../db/schema.js';
 import { findLockedUntil } from '../libs/period-lock.js';
 
@@ -46,9 +47,12 @@ async function attachDetail(claim: typeof expenseClaims.$inferSelect, payerName:
       accountName: chartOfAccounts.name,
       description: expenseClaimLines.description,
       amount: expenseClaimLines.amount,
+      projectId: expenseClaimLines.projectId,
+      projectName: projects.name,
     })
     .from(expenseClaimLines)
     .innerJoin(chartOfAccounts, eq(expenseClaimLines.accountId, chartOfAccounts.id))
+    .leftJoin(projects, eq(expenseClaimLines.projectId, projects.id))
     .where(eq(expenseClaimLines.expenseClaimId, claim.id))
     .orderBy(asc(expenseClaimLines.lineNo), asc(expenseClaimLines.id));
 
@@ -139,7 +143,7 @@ export async function createExpenseClaim(
     payerId: string;
     payee?: string;
     description?: string;
-    lines: { accountId: string; description?: string; amount: number }[];
+    lines: { accountId: string; projectId?: string; description?: string; amount: number }[];
   },
 ) {
   const [payer] = await db
@@ -167,7 +171,18 @@ export async function createExpenseClaim(
     .select({ id: bankAccounts.controlAccountId })
     .from(bankAccounts)
     .where(and(eq(bankAccounts.businessId, businessId), inArray(bankAccounts.controlAccountId, accountIds)));
-  if (bankControl.length > 0) return { result: null, error: 'INVALID_ACCOUNT' as const };
+    if (bankControl.length > 0) return { result: null, error: 'INVALID_ACCOUNT' as const };
+
+  // Proyek baris: harus milik bisnis ini dan berstatus Active.
+  const projectIds = [...new Set(data.lines.map((l) => l.projectId).filter((id): id is string => !!id))];
+  if (projectIds.length > 0) {
+    const found = await db
+      .select({ id: projects.id, status: projects.status })
+      .from(projects)
+      .where(and(eq(projects.businessId, businessId), inArray(projects.id, projectIds)));
+    if (found.length !== projectIds.length) return { result: null, error: 'INVALID_PROJECT' as const };
+    if (found.some((p) => p.status !== 'active')) return { result: null, error: 'INACTIVE_PROJECT' as const };
+  }
 
   const totalCents = data.lines.reduce((sum, l) => sum + Math.round(l.amount * 100), 0);
   const total = (totalCents / 100).toFixed(2);
@@ -200,6 +215,7 @@ export async function createExpenseClaim(
       await tx.insert(journalEntryLines).values({
         journalEntryId: journal.id,
         accountId: l.accountId,
+        projectId: l.projectId,
         debit: l.amount.toFixed(2),
         credit: '0.00',
         description: l.description,
@@ -234,6 +250,7 @@ export async function createExpenseClaim(
         expenseClaimId: claim.id,
         lineNo: i + 1,
         accountId: l.accountId,
+        projectId: l.projectId,
         description: l.description,
         amount: l.amount.toFixed(2),
       })),
@@ -285,6 +302,7 @@ export async function deleteExpenseClaim(businessId: string, claimId: string) {
         journalEntryId: reversal.id,
         accountId: line.accountId,
         contactId: line.contactId,
+        projectId: line.projectId,
         debit: line.credit,
         credit: line.debit,
         description: line.description,

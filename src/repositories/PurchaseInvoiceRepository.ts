@@ -10,12 +10,13 @@ import {
   journalEntryLines,
   purchaseOrders,
   purchaseOrderLines,
+  projects,
 } from '../db/schema.js';
 import { findLockedUntil } from '../libs/period-lock.js';
 
 export class BusinessError extends Error {}
 
-type LineInput = { purchaseOrderLineId?: string; accountId: string; qty: number; unitPrice: number };
+type LineInput = { purchaseOrderLineId?: string; projectId?: string; accountId: string; qty: number; unitPrice: number };
 
 async function findApControlAccount(businessId: string) {
   const [row] = await db
@@ -50,6 +51,19 @@ async function areValidExpenseAccounts(businessId: string, accountIds: string[])
       ),
     );
   return rows.length === unique.length;
+}
+
+// Proyek baris: harus milik bisnis ini dan berstatus Active.
+async function validateProjects(businessId: string, projectIds: (string | null | undefined)[]) {
+  const unique = [...new Set(projectIds.filter((id): id is string => !!id))];
+  if (unique.length === 0) return null;
+  const rows = await db
+    .select({ id: projects.id, status: projects.status })
+    .from(projects)
+    .where(and(eq(projects.businessId, businessId), inArray(projects.id, unique)));
+  if (rows.length !== unique.length) return 'INVALID_PROJECT' as const;
+  if (rows.some((p) => p.status !== 'active')) return 'INACTIVE_PROJECT' as const;
+  return null;
 }
 
 // Validasi tautan ke Purchase Order: PO harus milik bisnis ini, pemasoknya sama
@@ -95,9 +109,12 @@ async function attachComputedFields(invoice: typeof purchaseInvoices.$inferSelec
       accountName: chartOfAccounts.name,
       qty: purchaseInvoiceLines.qty,
       unitPrice: purchaseInvoiceLines.unitPrice,
+      projectId: purchaseInvoiceLines.projectId,
+      projectName: projects.name,
     })
     .from(purchaseInvoiceLines)
     .innerJoin(chartOfAccounts, eq(purchaseInvoiceLines.accountId, chartOfAccounts.id))
+    .leftJoin(projects, eq(purchaseInvoiceLines.projectId, projects.id))
     .where(eq(purchaseInvoiceLines.purchaseInvoiceId, invoice.id))
     .orderBy(purchaseInvoiceLines.lineNo);
 
@@ -202,6 +219,9 @@ export async function createPurchaseInvoice(
   );
   if (poError) return { result: null, error: poError };
 
+  const projectError = await validateProjects(businessId, lines.map((l) => l.projectId));
+  if (projectError) return { result: null, error: projectError };
+
   const id = await db.transaction(async (tx) => {
     const [invoice] = await tx
       .insert(purchaseInvoices)
@@ -212,7 +232,7 @@ export async function createPurchaseInvoice(
       lines.map((l, index) => ({
         lineNo: index + 1,
         purchaseInvoiceId: invoice.id,
-        purchaseOrderLineId: l.purchaseOrderLineId ?? null,
+        purchaseOrderLineId: l.purchaseOrderLineId ?? null, projectId: l.projectId ?? null,
         accountId: l.accountId,
         qty: l.qty.toString(),
         unitPrice: l.unitPrice.toString(),
@@ -252,6 +272,11 @@ export async function updatePurchaseInvoice(
 
   const { lines, ...header } = data;
 
+    if (lines) {
+    const projectError = await validateProjects(businessId, lines.map((l) => l.projectId));
+    if (projectError) return { result: null, error: projectError };
+  }
+
   if (header.supplierId && !(await isValidSupplier(businessId, header.supplierId))) {
     return { result: null, error: 'INVALID_SUPPLIER' as const };
   }
@@ -289,7 +314,7 @@ export async function updatePurchaseInvoice(
         lines.map((l, index) => ({
           lineNo: index + 1,
           purchaseInvoiceId,
-          purchaseOrderLineId: l.purchaseOrderLineId ?? null,
+          purchaseOrderLineId: l.purchaseOrderLineId ?? null, projectId: l.projectId ?? null,
           accountId: l.accountId,
           qty: l.qty.toString(),
           unitPrice: l.unitPrice.toString(),
@@ -340,14 +365,21 @@ export async function approvePurchaseInvoice(businessId: string, purchaseInvoice
       })
       .returning();
 
-    const grouped = new Map<string, number>();
+    const grouped = new Map<string, { accountId: string; projectId: string | null; amount: number }>();
     for (const line of invoice.lines) {
-      grouped.set(line.accountId, (grouped.get(line.accountId) ?? 0) + line.subtotal);
+      const key = `${line.accountId}|${line.projectId ?? ''}`;
+      const current = grouped.get(key);
+      grouped.set(key, {
+        accountId: line.accountId,
+        projectId: line.projectId ?? null,
+        amount: (current?.amount ?? 0) + line.subtotal,
+      });
     }
-    for (const [accountId, amount] of grouped) {
+    for (const { accountId, projectId, amount } of grouped.values()) {
       await tx.insert(journalEntryLines).values({
         journalEntryId: journalEntry.id,
         accountId,
+        projectId,
         debit: amount.toString(),
         credit: '0.00',
       });
@@ -409,6 +441,7 @@ export async function voidPurchaseInvoice(businessId: string, purchaseInvoiceId:
         journalEntryId: reversal.id,
         accountId: line.accountId,
         contactId: line.contactId,
+        projectId: line.projectId,
         debit: line.credit, // dibalik
         credit: line.debit,
       });

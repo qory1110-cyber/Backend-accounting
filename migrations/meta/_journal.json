@@ -162,6 +162,48 @@
       "when": 1792132920967,
       "tag": "0022_overrated_killmonger",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792636638678,
+      "tag": "0023_mysterious_proudstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792648275575,
+      "tag": "0024_closed_justice",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792982162851,
+      "tag": "0025_serious_tomorrow_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792986256152,
+      "tag": "0026_aspiring_may_parker",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792993005354,
+      "tag": "0027_cute_vargas",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1793001805474,
+      "tag": "0028_square_the_fallen",
+      "breakpoints": true
     }
   ]
 }

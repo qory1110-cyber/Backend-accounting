@@ -32,6 +32,7 @@ import { interAccountTransferRoutesPlugin } from './plugins/InterAccountTransfer
 import { journalEntryRoutesPlugin } from './plugins/JournalEntryRoutes.js';
 import { expenseClaimPayerRoutesPlugin } from './plugins/ExpenseClaimPayerRoutes.js';
 import { expenseClaimRoutesPlugin } from './plugins/ExpenseClaimRoutes.js';
+import { projectRoutesPlugin } from './plugins/ProjectRoutes.js';
 
 
 async function main() {
@@ -126,6 +127,7 @@ async function main() {
       instance.register(purchaseOrderRoutesPlugin, { prefix: '/businesses' });
       instance.register(expenseClaimPayerRoutesPlugin, { prefix: '/businesses' });
       instance.register(expenseClaimRoutesPlugin, { prefix: '/businesses' });
+      instance.register(projectRoutesPlugin, { prefix: '/businesses' });
     },
     { prefix: '/api/v1' },
   );

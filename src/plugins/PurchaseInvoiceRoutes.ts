@@ -80,6 +80,8 @@ export const purchaseInvoiceRoutesPlugin = async (fastify: FastifyInstance) => {
       if (error === 'INVALID_PURCHASE_ORDER') return sendError(res, 400, 'BadRequest', 'Purchase Order tidak ditemukan di bisnis ini');
       if (error === 'PO_SUPPLIER_MISMATCH') return sendError(res, 400, 'BadRequest', 'Pemasok faktur harus sama dengan pemasok pada Purchase Order');
       if (error === 'INVALID_PO_LINE') return sendError(res, 400, 'BadRequest', 'Baris rincian menunjuk baris Purchase Order yang tidak valid');
+      if (error === 'INVALID_PROJECT') return sendError(res, 400, 'BadRequest', 'Proyek pada baris tidak valid di bisnis ini');
+      if (error === 'INACTIVE_PROJECT') return sendError(res, 400, 'BadRequest', 'Proyek berstatus Inactive atau Completed, pilih proyek yang Active');
       return sendData(res, result, 201);
     },
   });
@@ -119,6 +121,8 @@ export const purchaseInvoiceRoutesPlugin = async (fastify: FastifyInstance) => {
       if (error === 'INVALID_PURCHASE_ORDER') return sendError(res, 400, 'BadRequest', 'Purchase Order tidak ditemukan di bisnis ini');
       if (error === 'PO_SUPPLIER_MISMATCH') return sendError(res, 400, 'BadRequest', 'Pemasok faktur harus sama dengan pemasok pada Purchase Order');
       if (error === 'INVALID_PO_LINE') return sendError(res, 400, 'BadRequest', 'Baris rincian menunjuk baris Purchase Order yang tidak valid');
+      if (error === 'INVALID_PROJECT') return sendError(res, 400, 'BadRequest', 'Proyek pada baris tidak valid di bisnis ini');
+      if (error === 'INACTIVE_PROJECT') return sendError(res, 400, 'BadRequest', 'Proyek berstatus Inactive atau Completed, pilih proyek yang Active');
       return sendData(res, result);
     },
   });

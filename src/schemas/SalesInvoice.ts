@@ -3,6 +3,7 @@ import { IsoDateSchema } from './globals.js';
 
 export const SalesInvoiceLineSchema = z.object({
   accountId: z.string().uuid(),
+  projectId: z.string().uuid().optional(),
   qty: z.coerce.number().positive(),
   unitPrice: z.coerce.number().min(0),
 });
@@ -23,6 +24,8 @@ export const SalesInvoiceLineResponseSchema = z.object({
   id: z.string().uuid(),
   accountId: z.string().uuid(),
   accountName: z.string(),
+  projectId: z.string().uuid().nullable(),
+  projectName: z.string().nullable(),
   qty: z.string(),
   unitPrice: z.string(),
   subtotal: z.number(),

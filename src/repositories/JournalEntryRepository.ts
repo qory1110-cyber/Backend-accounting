@@ -1,12 +1,12 @@
 import { and, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import db from '../db/index.js';
-import { chartOfAccounts, journalEntries, journalEntryLines } from '../db/schema.js';
+import { chartOfAccounts, journalEntries, journalEntryLines, projects } from '../db/schema.js';
 import { findLockedUntilForAccounts } from '../libs/period-lock.js';
 
 const MANUAL_SOURCE = 'manual_journal';
 const MANUAL_VOID_SOURCE = 'manual_journal_void';
 
-type LineInput = { accountId: string; debit: number; credit: number; description?: string };
+type LineInput = { accountId: string; projectId?: string; debit: number; credit: number; description?: string };
 
 const toCents = (n: number) => Math.round(n * 100);
 
@@ -51,9 +51,12 @@ async function attachDetail(entry: typeof journalEntries.$inferSelect) {
       debit: journalEntryLines.debit,
       credit: journalEntryLines.credit,
       description: journalEntryLines.description,
+      projectId: journalEntryLines.projectId,
+      projectName: projects.name,
     })
     .from(journalEntryLines)
     .innerJoin(chartOfAccounts, eq(journalEntryLines.accountId, chartOfAccounts.id))
+    .leftJoin(projects, eq(journalEntryLines.projectId, projects.id))
     .where(eq(journalEntryLines.journalEntryId, entry.id))
     // Debit ditampilkan lebih dulu; tabel baris tidak menyimpan urutan input.
     .orderBy(sql`(${journalEntryLines.debit} > 0) DESC`, journalEntryLines.id);
@@ -104,6 +107,19 @@ export async function getJournalEntryById(businessId: string, id: string) {
   return row ? attachDetail(row) : null;
 }
 
+// Proyek baris: harus milik bisnis ini dan berstatus Active.
+async function validateProjects(businessId: string, projectIds: (string | null | undefined)[]) {
+  const unique = [...new Set(projectIds.filter((id): id is string => !!id))];
+  if (unique.length === 0) return null;
+  const rows = await db
+    .select({ id: projects.id, status: projects.status })
+    .from(projects)
+    .where(and(eq(projects.businessId, businessId), inArray(projects.id, unique)));
+  if (rows.length !== unique.length) return 'INVALID_PROJECT' as const;
+  if (rows.some((p) => p.status !== 'active')) return 'INACTIVE_PROJECT' as const;
+  return null;
+}
+
 // Jurnal manual langsung terposting (tidak ada draft). Tidak ada update:
 // koreksi lewat Clone di UI lalu hapus jurnal yang salah (memposting jurnal pembalik).
 export async function createJournalEntry(
@@ -134,6 +150,9 @@ export async function createJournalEntry(
     );
   if (found.length !== accountIds.length) return { result: null, error: 'INVALID_ACCOUNT' as const };
 
+  const projectError = await validateProjects(businessId, data.lines.map((l) => l.projectId));
+  if (projectError) return { result: null, error: projectError };
+
   const lockedUntil = await findLockedUntilForAccounts(businessId, accountIds, data.entryDate);
   if (lockedUntil) return { result: null, error: 'PERIOD_LOCKED' as const, lockedUntil };
 
@@ -157,6 +176,7 @@ export async function createJournalEntry(
         accountId: l.accountId,
         debit: l.debit.toFixed(2),
         credit: l.credit.toFixed(2),
+        projectId: l.projectId ?? null,
         description: l.description || null,
       })),
     );
@@ -208,6 +228,7 @@ export async function deleteJournalEntry(businessId: string, id: string) {
         accountId: l.accountId,
         debit: l.credit.toFixed(2),
         credit: l.debit.toFixed(2),
+        projectId: l.projectId,
         description: l.description,
       })),
     );

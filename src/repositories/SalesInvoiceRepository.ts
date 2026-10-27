@@ -8,10 +8,11 @@ import {
   journalEntries,
   journalEntryLines,
   receiptLines,
+  projects,
 } from '../db/schema.js';
 import { findLockedUntil } from '../libs/period-lock.js';
 
-type LineInput = { accountId: string; qty: number; unitPrice: number };
+type LineInput = { accountId: string; projectId?: string; qty: number; unitPrice: number };
 
 async function findArControlAccount(businessId: string) {
   const [row] = await db
@@ -48,6 +49,19 @@ async function areValidIncomeAccounts(businessId: string, accountIds: string[]) 
   return rows.length === unique.length;
 }
 
+// Proyek baris: harus milik bisnis ini dan berstatus Active.
+async function validateProjects(businessId: string, projectIds: (string | null | undefined)[]) {
+  const unique = [...new Set(projectIds.filter((id): id is string => !!id))];
+  if (unique.length === 0) return null;
+  const rows = await db
+    .select({ id: projects.id, status: projects.status })
+    .from(projects)
+    .where(and(eq(projects.businessId, businessId), inArray(projects.id, unique)));
+  if (rows.length !== unique.length) return 'INVALID_PROJECT' as const;
+  if (rows.some((p) => p.status !== 'active')) return 'INACTIVE_PROJECT' as const;
+  return null;
+}
+
 async function attachComputedFields(invoice: typeof salesInvoices.$inferSelect) {
   const lines = await db
     .select({
@@ -56,9 +70,12 @@ async function attachComputedFields(invoice: typeof salesInvoices.$inferSelect) 
       accountName: chartOfAccounts.name,
       qty: salesInvoiceLines.qty,
       unitPrice: salesInvoiceLines.unitPrice,
+      projectId: salesInvoiceLines.projectId,
+      projectName: projects.name,
     })
     .from(salesInvoiceLines)
     .innerJoin(chartOfAccounts, eq(salesInvoiceLines.accountId, chartOfAccounts.id))
+    .leftJoin(projects, eq(salesInvoiceLines.projectId, projects.id))
     .where(eq(salesInvoiceLines.salesInvoiceId, invoice.id));
 
   const linesWithSubtotal = lines.map((l) => ({ ...l, subtotal: Number(l.qty) * Number(l.unitPrice) }));
@@ -146,6 +163,9 @@ export async function createSalesInvoice(
     return { result: null, error: 'INVALID_ACCOUNT' as const };
   }
 
+    const projectError = await validateProjects(businessId, lines.map((l) => l.projectId));
+  if (projectError) return { result: null, error: projectError };
+
   const id = await db.transaction(async (tx) => {
     const [invoice] = await tx
       .insert(salesInvoices)
@@ -155,7 +175,7 @@ export async function createSalesInvoice(
     await tx.insert(salesInvoiceLines).values(
       lines.map((l) => ({
         salesInvoiceId: invoice.id,
-        accountId: l.accountId,
+        accountId: l.accountId, projectId: l.projectId ?? null,
         qty: l.qty.toString(),
         unitPrice: l.unitPrice.toString(),
       })),
@@ -193,6 +213,10 @@ export async function updateSalesInvoice(
   if (header.customerId && !(await isValidCustomer(businessId, header.customerId))) {
     return { result: null, error: 'INVALID_CUSTOMER' as const };
   }
+  if (lines) {
+    const projectError = await validateProjects(businessId, lines.map((l) => l.projectId));
+    if (projectError) return { result: null, error: projectError };
+  }
   if (lines && !(await areValidIncomeAccounts(businessId, lines.map((l) => l.accountId)))) {
     return { result: null, error: 'INVALID_ACCOUNT' as const };
   }
@@ -207,6 +231,7 @@ export async function updateSalesInvoice(
         lines.map((l) => ({
           salesInvoiceId,
           accountId: l.accountId,
+          projectId: l.projectId ?? null,
           qty: l.qty.toString(),
           unitPrice: l.unitPrice.toString(),
         })),
@@ -263,15 +288,22 @@ export async function sendSalesInvoice(businessId: string, salesInvoiceId: strin
       credit: '0.00',
     });
 
-    const grouped = new Map<string, number>();
+    const grouped = new Map<string, { accountId: string; projectId: string | null; amount: number }>();
     for (const line of invoice.lines) {
-      grouped.set(line.accountId, (grouped.get(line.accountId) ?? 0) + line.subtotal);
+      const key = `${line.accountId}|${line.projectId ?? ''}`;
+      const current = grouped.get(key);
+      grouped.set(key, {
+        accountId: line.accountId,
+        projectId: line.projectId ?? null,
+        amount: (current?.amount ?? 0) + line.subtotal,
+      });
     }
-    for (const [accountId, amount] of grouped) {
+    for (const { accountId, projectId, amount } of grouped.values()) {
       await tx.insert(journalEntryLines).values({
         journalEntryId: journalEntry.id,
         accountId,
         debit: '0.00',
+        projectId,
         credit: amount.toString(),
       });
     }
@@ -324,6 +356,7 @@ export async function voidSalesInvoice(businessId: string, salesInvoiceId: strin
         journalEntryId: reversal.id,
         accountId: line.accountId,
         contactId: line.contactId,
+        projectId: line.projectId,
         debit: line.credit,
         credit: line.debit,
       });

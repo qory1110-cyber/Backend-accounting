@@ -10,6 +10,8 @@ export const PaymentLineSchema = z.object({
   // ke Utang Klaim Biaya). Payee harus Payer pemilik klaim.
   expenseClaimId: z.string().uuid().optional(),
   accountId: z.string().uuid().optional(),
+  // Hanya dipakai untuk baris posting langsung ke GL; diabaikan kalau melunasi faktur/klaim.
+  projectId: z.string().uuid().optional(),
 })
   .refine((l) => l.purchaseInvoiceId || l.expenseClaimId || l.accountId, {
     message: 'Isi purchaseInvoiceId, expenseClaimId, atau accountId',
@@ -31,6 +33,8 @@ export const PaymentLineResponseSchema = z.object({
   id: z.string().uuid(),
   accountId: z.string().uuid(),
   accountName: z.string(),
+  projectId: z.string().uuid().nullable(),
+  projectName: z.string().nullable(),
   purchaseInvoiceId: z.string().uuid().nullable(),
   purchaseInvoiceReference: z.string().nullable(),
   expenseClaimId: z.string().uuid().nullable(),

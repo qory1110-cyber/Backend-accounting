@@ -5,6 +5,7 @@ const JournalLineInputSchema = z.object({
   accountId: z.string().uuid(),
   debit: z.coerce.number().min(0).default(0),
   credit: z.coerce.number().min(0).default(0),
+  projectId: z.string().uuid().optional(),
   description: z.string().trim().max(500).optional(),
 });
 
@@ -26,6 +27,8 @@ export const JournalLineResponseSchema = z.object({
   accountId: z.string().uuid(),
   accountCode: z.string(),
   accountName: z.string(),
+  projectId: z.string().uuid().nullable(),
+  projectName: z.string().nullable(),
   debit: z.number(),
   credit: z.number(),
   description: z.string().nullable(),

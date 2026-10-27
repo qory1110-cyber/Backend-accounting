@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import db from '../db/index.js';
 import {
   payments,
@@ -12,11 +12,31 @@ import {
   expenseClaimPayers,
   journalEntries,
   journalEntryLines,
+  projects,
 } from '../db/schema.js';
 import { findLockedUntil } from '../libs/period-lock.js';
 import { ensureExpenseClaimAccount } from './ExpenseClaimRepository.js';
 
-type LineInput = { amount: number; purchaseInvoiceId?: string; expenseClaimId?: string; accountId?: string };
+type LineInput = {
+  amount: number;
+  purchaseInvoiceId?: string;
+  expenseClaimId?: string;
+  accountId?: string;
+  projectId?: string;
+};
+
+// Proyek baris: harus milik bisnis ini dan berstatus Active.
+async function validateProjects(businessId: string, projectIds: (string | null | undefined)[]) {
+  const unique = [...new Set(projectIds.filter((id): id is string => !!id))];
+  if (unique.length === 0) return null;
+  const rows = await db
+    .select({ id: projects.id, status: projects.status })
+    .from(projects)
+    .where(and(eq(projects.businessId, businessId), inArray(projects.id, unique)));
+  if (rows.length !== unique.length) return 'INVALID_PROJECT' as const;
+  if (rows.some((p) => p.status !== 'active')) return 'INACTIVE_PROJECT' as const;
+  return null;
+}
 
 async function findApControlAccount(businessId: string) {
   const [row] = await db
@@ -93,11 +113,14 @@ async function attachDetail(payment: typeof payments.$inferSelect) {
       expenseClaimId: paymentLines.expenseClaimId,
       expenseClaimReference: expenseClaims.reference,
       amount: paymentLines.amount,
+      projectId: paymentLines.projectId,
+      projectName: projects.name,
     })
     .from(paymentLines)
     .innerJoin(chartOfAccounts, eq(paymentLines.accountId, chartOfAccounts.id))
     .leftJoin(purchaseInvoices, eq(paymentLines.purchaseInvoiceId, purchaseInvoices.id))
     .leftJoin(expenseClaims, eq(paymentLines.expenseClaimId, expenseClaims.id))
+    .leftJoin(projects, eq(paymentLines.projectId, projects.id))
     .where(eq(paymentLines.paymentId, payment.id));
 
   const totalAmount = lines.reduce((sum, l) => sum + Number(l.amount), 0);
@@ -189,6 +212,7 @@ export async function createPayment(
     purchaseInvoiceId?: string;
     expenseClaimId?: string;
     contactId?: string;
+    projectId?: string;
     amount: number;
   }[] = [];
   const claimAllocated = new Map<string, number>(); // total alokasi per klaim dalam satu Payment
@@ -230,9 +254,17 @@ resolvedLines.push({
       if (account.id === bankAccountInfo.controlAccountId) {
         return { result: null, error: 'ACCOUNT_SAME_AS_BANK' as const };
       }
-      resolvedLines.push({ accountId: line.accountId!, contactId: data.payeeContactId, amount: line.amount });
+resolvedLines.push({
+        accountId: line.accountId!,
+        contactId: data.payeeContactId,
+        projectId: line.projectId,
+        amount: line.amount,
+      });
     }
   }
+
+  const projectError = await validateProjects(businessId, resolvedLines.map((l) => l.projectId));
+  if (projectError) return { result: null, error: projectError };
 
   const reference = data.reference?.trim() || `PAY-${Date.now()}`;
   const totalAmount = resolvedLines.reduce((sum, l) => sum + l.amount, 0);
@@ -258,18 +290,19 @@ resolvedLines.push({
     });
 
     // Debit dikelompokkan per akun.
-    const grouped = new Map<string, { accountId: string; contactId?: string; amount: number }>();
+const grouped = new Map<string, { accountId: string; contactId?: string; projectId?: string; amount: number }>();
 for (const l of resolvedLines) {
-  const key = `${l.accountId}:${l.contactId ?? ''}`;
-  const entry = grouped.get(key) ?? { accountId: l.accountId, contactId: l.contactId, amount: 0 };
+const key = `${l.accountId}:${l.contactId ?? ''}:${l.projectId ?? ''}`;
+const entry = grouped.get(key) ?? { accountId: l.accountId, contactId: l.contactId, projectId: l.projectId, amount: 0 };
   entry.amount += l.amount;
   grouped.set(key, entry);
 }
-for (const { accountId, contactId, amount } of grouped.values()) {
+for (const { accountId, contactId, projectId, amount } of grouped.values()) {
   await tx.insert(journalEntryLines).values({
     journalEntryId: journalEntry.id,
     accountId,
     contactId,
+    projectId,
     debit: amount.toString(),
     credit: '0.00',
   });
@@ -295,6 +328,7 @@ for (const { accountId, contactId, amount } of grouped.values()) {
         accountId: l.accountId,
         purchaseInvoiceId: l.purchaseInvoiceId,
         expenseClaimId: l.expenseClaimId,
+        projectId: l.projectId ?? null,
         amount: l.amount.toString(),
       })),
     );
@@ -344,6 +378,7 @@ export async function deletePayment(businessId: string, paymentId: string) {
         journalEntryId: reversal.id,
         accountId: line.accountId,
         contactId: line.contactId,
+        projectId: line.projectId,
         debit: line.credit,
         credit: line.debit,
       });

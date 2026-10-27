@@ -3,6 +3,7 @@ import { IsoDateSchema, PaginationQuerySchema, createPaginatedResponseSchema } f
 
 export const ExpenseClaimLineInputSchema = z.object({
   accountId: z.string().uuid(),
+  projectId: z.string().uuid().optional(),
   description: z.string().optional(),
   amount: z.coerce.number().positive(),
 });
@@ -29,6 +30,8 @@ export const ExpenseClaimLineResponseSchema = z.object({
   accountName: z.string(),
   description: z.string().nullable(),
   amount: z.number(),
+  projectId: z.string().uuid().nullable(),
+  projectName: z.string().nullable(),
 });
 
 export const ExpenseClaimResponseSchema = z.object({
