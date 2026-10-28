@@ -365,3 +365,24 @@ export const projects = pgTable('projects', {
   createdAt: timestamp().notNull().defaultNow(),
   updatedAt: timestamp().notNull().defaultNow(),
 });
+
+export const salesQuotes = pgTable('sales_quotes', {
+  id: uuid().defaultRandom().primaryKey(),
+  businessId: uuid().notNull().references(() => businesses.id, { onDelete: 'cascade' }),
+  customerId: uuid().notNull().references(() => contacts.id),
+  issueDate: date().notNull(),
+  validDays: integer(), // masa berlaku dalam hari; Expiry date dihitung = issueDate + validDays
+  reference: varchar({ length: 100 }),
+  billingAddress: text(),
+  description: text(),
+  createdAt: timestamp().notNull().defaultNow(),
+});
+
+export const salesQuoteLines = pgTable('sales_quote_lines', {
+  id: uuid().defaultRandom().primaryKey(),
+  salesQuoteId: uuid().notNull().references(() => salesQuotes.id, { onDelete: 'cascade' }),
+  lineNo: integer().notNull().default(0), // urutan baris sesuai input
+  description: text().notNull(),
+  qty: numeric({ precision: 18, scale: 2 }).notNull(),
+  unitPrice: numeric({ precision: 18, scale: 2 }).notNull(),
+});

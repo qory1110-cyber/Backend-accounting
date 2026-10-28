@@ -204,6 +204,13 @@
       "when": 1793001805474,
       "tag": "0028_square_the_fallen",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1793092727260,
+      "tag": "0029_wild_wendell_vaughn",
+      "breakpoints": true
     }
   ]
 }
