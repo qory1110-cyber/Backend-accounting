@@ -386,3 +386,22 @@ export const salesQuoteLines = pgTable('sales_quote_lines', {
   qty: numeric({ precision: 18, scale: 2 }).notNull(),
   unitPrice: numeric({ precision: 18, scale: 2 }).notNull(),
 });
+
+export const salesOrders = pgTable('sales_orders', {
+  id: uuid().defaultRandom().primaryKey(),
+  businessId: uuid().notNull().references(() => businesses.id, { onDelete: 'cascade' }),
+  customerId: uuid().notNull().references(() => contacts.id),
+  issueDate: date().notNull(),
+  reference: varchar({ length: 100 }),
+  description: text(),
+  createdAt: timestamp().notNull().defaultNow(),
+});
+
+export const salesOrderLines = pgTable('sales_order_lines', {
+  id: uuid().defaultRandom().primaryKey(),
+  salesOrderId: uuid().notNull().references(() => salesOrders.id, { onDelete: 'cascade' }),
+  lineNo: integer().notNull().default(0), // urutan baris sesuai input
+  description: text().notNull(),
+  qty: numeric({ precision: 18, scale: 2 }).notNull(),
+  unitPrice: numeric({ precision: 18, scale: 2 }).notNull(),
+});
