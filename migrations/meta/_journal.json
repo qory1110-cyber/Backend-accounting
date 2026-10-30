@@ -218,6 +218,13 @@
       "when": 1793171394449,
       "tag": "0030_goofy_kate_bishop",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1793262176875,
+      "tag": "0031_chubby_shadowcat",
+      "breakpoints": true
     }
   ]
 }

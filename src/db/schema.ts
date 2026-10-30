@@ -405,3 +405,23 @@ export const salesOrderLines = pgTable('sales_order_lines', {
   qty: numeric({ precision: 18, scale: 2 }).notNull(),
   unitPrice: numeric({ precision: 18, scale: 2 }).notNull(),
 });
+
+export const creditNotes = pgTable('credit_notes', {
+  id: uuid().defaultRandom().primaryKey(),
+  businessId: uuid().notNull().references(() => businesses.id, { onDelete: 'cascade' }),
+  customerId: uuid().notNull().references(() => contacts.id),
+  issueDate: date().notNull(),
+  reference: varchar({ length: 100 }),
+  description: text(),
+  journalEntryId: uuid().notNull().references(() => journalEntries.id), // jurnal diposting saat Credit Note dibuat
+  createdAt: timestamp().notNull().defaultNow(),
+});
+
+export const creditNoteLines = pgTable('credit_note_lines', {
+  id: uuid().defaultRandom().primaryKey(),
+  creditNoteId: uuid().notNull().references(() => creditNotes.id, { onDelete: 'cascade' }),
+  lineNo: integer().notNull().default(0), // urutan baris sesuai input
+  accountId: uuid().notNull().references(() => chartOfAccounts.id), // akun Income yang dikurangi
+  qty: numeric({ precision: 18, scale: 2 }).notNull(),
+  unitPrice: numeric({ precision: 18, scale: 2 }).notNull(),
+});
