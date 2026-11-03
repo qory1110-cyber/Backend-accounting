@@ -425,3 +425,13 @@ export const creditNoteLines = pgTable('credit_note_lines', {
   qty: numeric({ precision: 18, scale: 2 }).notNull(),
   unitPrice: numeric({ precision: 18, scale: 2 }).notNull(),
 });
+
+export const latePaymentFees = pgTable('late_payment_fees', {
+  id: uuid().defaultRandom().primaryKey(),
+  businessId: uuid().notNull().references(() => businesses.id, { onDelete: 'cascade' }),
+  customerId: uuid().notNull().references(() => contacts.id),
+  salesInvoiceId: uuid().notNull().references(() => salesInvoices.id), // faktur yang terlambat dibayar
+  feeDate: date().notNull(),
+  amount: numeric({ precision: 18, scale: 2 }).notNull(), // diisi manual
+  createdAt: timestamp().notNull().defaultNow(),
+});

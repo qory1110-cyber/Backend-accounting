@@ -225,6 +225,13 @@
       "when": 1793262176875,
       "tag": "0031_chubby_shadowcat",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1793589902991,
+      "tag": "0032_narrow_meteorite",
+      "breakpoints": true
     }
   ]
 }

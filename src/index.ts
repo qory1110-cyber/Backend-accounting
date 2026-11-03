@@ -28,6 +28,7 @@ import { purchaseOrderRoutesPlugin } from './plugins/PurchaseOrderRoutes.js';
 import { salesQuoteRoutesPlugin } from './plugins/SalesQuoteRoutes.js';
 import { salesOrderRoutesPlugin } from './plugins/SalesOrderRoutes.js';
 import { creditNoteRoutesPlugin } from './plugins/CreditNoteRoutes.js';
+import { latePaymentFeeRoutesPlugin } from './plugins/LatePaymentFeeRoutes.js';
 import { receiptRoutesPlugin } from './plugins/ReceiptRoutes.js';
 import { bankReconciliationRoutesPlugin } from './plugins/BankReconciliationRoutes.js';
 import { paymentRoutesPlugin } from './plugins/PaymentRoutes.js';
@@ -131,6 +132,7 @@ async function main() {
       instance.register(salesQuoteRoutesPlugin, { prefix: '/businesses' });
       instance.register(salesOrderRoutesPlugin, { prefix: '/businesses' });
       instance.register(creditNoteRoutesPlugin, { prefix: '/businesses' });
+      instance.register(latePaymentFeeRoutesPlugin, { prefix: '/businesses' });
       instance.register(expenseClaimPayerRoutesPlugin, { prefix: '/businesses' });
       instance.register(expenseClaimRoutesPlugin, { prefix: '/businesses' });
       instance.register(projectRoutesPlugin, { prefix: '/businesses' });
