@@ -435,3 +435,24 @@ export const latePaymentFees = pgTable('late_payment_fees', {
   amount: numeric({ precision: 18, scale: 2 }).notNull(), // diisi manual
   createdAt: timestamp().notNull().defaultNow(),
 });
+
+export const deliveryNotes = pgTable('delivery_notes', {
+  id: uuid().defaultRandom().primaryKey(),
+  businessId: uuid().notNull().references(() => businesses.id, { onDelete: 'cascade' }),
+  customerId: uuid().notNull().references(() => contacts.id),
+  salesOrderId: uuid().references(() => salesOrders.id, { onDelete: 'set null' }),
+  salesInvoiceId: uuid().references(() => salesInvoices.id, { onDelete: 'set null' }),
+  deliveryDate: date().notNull(),
+  reference: varchar({ length: 100 }),
+  deliveryAddress: text(),
+  description: text(),
+  createdAt: timestamp().notNull().defaultNow(),
+});
+
+export const deliveryNoteLines = pgTable('delivery_note_lines', {
+  id: uuid().defaultRandom().primaryKey(),
+  deliveryNoteId: uuid().notNull().references(() => deliveryNotes.id, { onDelete: 'cascade' }),
+  lineNo: integer().notNull().default(0), // urutan baris sesuai input
+  description: text().notNull(),
+  qty: numeric({ precision: 18, scale: 2 }).notNull(),
+});

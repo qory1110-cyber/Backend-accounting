@@ -232,6 +232,13 @@
       "when": 1793589902991,
       "tag": "0032_narrow_meteorite",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1793680647924,
+      "tag": "0033_calm_odin",
+      "breakpoints": true
     }
   ]
 }
