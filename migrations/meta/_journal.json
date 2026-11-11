@@ -239,6 +239,13 @@
       "when": 1793680647924,
       "tag": "0033_calm_odin",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1793935470354,
+      "tag": "0034_purple_lorna_dane",
+      "breakpoints": true
     }
   ]
 }

@@ -456,3 +456,22 @@ export const deliveryNoteLines = pgTable('delivery_note_lines', {
   description: text().notNull(),
   qty: numeric({ precision: 18, scale: 2 }).notNull(),
 });
+
+export const billableTimeStatusEnum = pgEnum('billable_time_status', ['uninvoiced', 'invoiced', 'written_off']);
+
+export const billableTimes = pgTable('billable_times', {
+  id: uuid().defaultRandom().primaryKey(),
+  businessId: uuid().notNull().references(() => businesses.id, { onDelete: 'cascade' }),
+  customerId: uuid().references(() => contacts.id),
+  workDate: date().notNull(),
+  description: text(),
+  hourlyRate: numeric({ precision: 18, scale: 2 }).notNull().default('0.00'),
+  hours: integer().notNull().default(0),
+  minutes: integer().notNull().default(0),
+  status: billableTimeStatusEnum().notNull().default('uninvoiced'),
+  writtenOffDate: date(),
+  salesInvoiceId: uuid().references(() => salesInvoices.id, { onDelete: 'set null' }),
+  journalEntryId: uuid().references(() => journalEntries.id), // jurnal pembentukan aset (kosong bila amount 0)
+  createdAt: timestamp().notNull().defaultNow(),
+  updatedAt: timestamp().notNull().defaultNow(),
+});

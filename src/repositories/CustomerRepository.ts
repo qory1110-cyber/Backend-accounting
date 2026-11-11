@@ -1,6 +1,6 @@
 import { and, eq, sql, desc } from 'drizzle-orm';
 import db from '../db/index.js';
-import { contacts, salesInvoices, salesInvoiceLines, receiptLines } from '../db/schema.js';
+import { contacts, salesInvoices, salesInvoiceLines, receiptLines, billableTimes } from '../db/schema.js';
 
 async function computeAccountsReceivable(customerId: string): Promise<number> {
   const [invoiceTotal] = await db
@@ -18,11 +18,24 @@ async function computeAccountsReceivable(customerId: string): Promise<number> {
   return Number(invoiceTotal.total) - Number(allocatedTotal.total);
 }
 
+// Total Billable Time yang belum ditagih, dibulatkan 2 desimal per catatan
+// (sama dengan rumus nilai catatan di modul Billable Time).
+async function computeUninvoicedBillableTime(customerId: string): Promise<number> {
+  const [row] = await db
+    .select({
+      total: sql<string>`COALESCE(SUM(ROUND(${billableTimes.hourlyRate} * (${billableTimes.hours} + ${billableTimes.minutes} / 60.0), 2)), 0)`,
+    })
+    .from(billableTimes)
+    .where(and(eq(billableTimes.customerId, customerId), eq(billableTimes.status, 'uninvoiced')));
+  return Number(row.total);
+}
+
 async function toResponseShape(row: typeof contacts.$inferSelect) {
   return {
     ...row,
     accountsReceivable: await computeAccountsReceivable(row.id),
     unallocatedReceipts: 0,
+    uninvoicedBillableTime: await computeUninvoicedBillableTime(row.id),
   };
 }
 

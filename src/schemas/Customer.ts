@@ -32,6 +32,7 @@ export const CustomerResponseSchema = z.object({
   // siap supaya tidak perlu ubah kontrak API saat modul itu dibangun nanti.
   accountsReceivable: z.number(),
   unallocatedReceipts: z.number(),
+  uninvoicedBillableTime: z.number(),
 });
 
 export const CustomerListResponseSchema = z.object({
