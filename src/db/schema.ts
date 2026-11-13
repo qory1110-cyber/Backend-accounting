@@ -475,3 +475,15 @@ export const billableTimes = pgTable('billable_times', {
   createdAt: timestamp().notNull().defaultNow(),
   updatedAt: timestamp().notNull().defaultNow(),
 });
+
+export const withholdingTaxReceipts = pgTable('withholding_tax_receipts', {
+  id: uuid().defaultRandom().primaryKey(),
+  businessId: uuid().notNull().references(() => businesses.id, { onDelete: 'cascade' }),
+  customerId: uuid().notNull().references(() => contacts.id),
+  receiptDate: date().notNull(),
+  amount: numeric({ precision: 18, scale: 2 }).notNull(),
+  description: text(),
+  journalEntryId: uuid().references(() => journalEntries.id), // jurnal posting terakhir
+  createdAt: timestamp().notNull().defaultNow(),
+  updatedAt: timestamp().notNull().defaultNow(),
+});
