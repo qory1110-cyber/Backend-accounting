@@ -487,3 +487,26 @@ export const withholdingTaxReceipts = pgTable('withholding_tax_receipts', {
   createdAt: timestamp().notNull().defaultNow(),
   updatedAt: timestamp().notNull().defaultNow(),
 });
+
+export const purchaseQuoteStatusEnum = pgEnum('purchase_quote_status', ['active', 'cancelled']);
+
+export const purchaseQuotes = pgTable('purchase_quotes', {
+  id: uuid().defaultRandom().primaryKey(),
+  businessId: uuid().notNull().references(() => businesses.id, { onDelete: 'cascade' }),
+  supplierId: uuid().notNull().references(() => contacts.id),
+  issueDate: date().notNull(),
+  reference: varchar({ length: 100 }),
+  description: text(),
+  status: purchaseQuoteStatusEnum().notNull().default('active'),
+  createdAt: timestamp().notNull().defaultNow(),
+  updatedAt: timestamp().notNull().defaultNow(),
+});
+
+export const purchaseQuoteLines = pgTable('purchase_quote_lines', {
+  id: uuid().defaultRandom().primaryKey(),
+  purchaseQuoteId: uuid().notNull().references(() => purchaseQuotes.id, { onDelete: 'cascade' }),
+  lineNo: integer().notNull().default(0), // urutan baris sesuai input
+  description: text().notNull(),
+  qty: numeric({ precision: 18, scale: 2 }).notNull(),
+  unitPrice: numeric({ precision: 18, scale: 2 }).notNull(),
+});
