@@ -11,6 +11,8 @@ import {
   purchaseOrders,
   purchaseOrderLines,
   projects,
+  debitNotes,
+  debitNoteLines,
 } from '../db/schema.js';
 import { findLockedUntil } from '../libs/period-lock.js';
 
@@ -132,7 +134,13 @@ if (invoice.status === 'approved') {
     .from(paymentLines)
     .where(eq(paymentLines.purchaseInvoiceId, invoice.id));
 
-  balanceDue = invoiceAmount - Number(paidRow.total);
+    const [debitRow] = await db
+    .select({ total: sql<string>`COALESCE(SUM(${debitNoteLines.qty} * ${debitNoteLines.unitPrice}), 0)` })
+    .from(debitNoteLines)
+    .innerJoin(debitNotes, eq(debitNoteLines.debitNoteId, debitNotes.id))
+    .where(eq(debitNotes.purchaseInvoiceId, invoice.id));
+
+  balanceDue = invoiceAmount - Number(paidRow.total) - Number(debitRow.total);
   const isOverdue = invoice.dueDate ? new Date(invoice.dueDate) < new Date() : false;
   paymentStatus = balanceDue <= 0 ? 'Paid in full' : isOverdue ? 'Overdue' : 'Coming due';
 }
@@ -419,6 +427,15 @@ export async function voidPurchaseInvoice(businessId: string, purchaseInvoiceId:
     .limit(1);
   if (existingPayment) return { result: null, error: 'HAS_PAYMENTS' as const };
 
+  
+  // Faktur yang punya Debit Note juga tidak boleh di-void: jurnal Debit Note-nya akan menggantung.
+  const [existingDebitNote] = await db
+    .select({ id: debitNotes.id })
+    .from(debitNotes)
+    .where(eq(debitNotes.purchaseInvoiceId, invoice.id))
+    .limit(1);
+  if (existingDebitNote) return { result: null, error: 'HAS_DEBIT_NOTES' as const };
+
   const originalLines = await db
     .select()
     .from(journalEntryLines)
@@ -476,8 +493,16 @@ export async function getPurchaseInvoiceTotals(businessId: string) {
     .innerJoin(purchaseInvoices, eq(paymentLines.purchaseInvoiceId, purchaseInvoices.id))
     .where(and(eq(purchaseInvoices.businessId, businessId), eq(purchaseInvoices.status, 'approved')));
 
+  // Kurangi Debit Note yang dikaitkan ke faktur approved.
+  const [debitRow] = await db
+    .select({ total: sql<string>`COALESCE(SUM(${debitNoteLines.qty} * ${debitNoteLines.unitPrice}), 0)` })
+    .from(debitNoteLines)
+    .innerJoin(debitNotes, eq(debitNoteLines.debitNoteId, debitNotes.id))
+    .innerJoin(purchaseInvoices, eq(debitNotes.purchaseInvoiceId, purchaseInvoices.id))
+    .where(and(eq(purchaseInvoices.businessId, businessId), eq(purchaseInvoices.status, 'approved')));
+
   return {
     totalInvoiceAmount: Number(invoiceAmountRow.total),
-    totalBalanceDue: Number(approvedAmountRow.total) - Number(paidRow.total),
+    totalBalanceDue: Number(approvedAmountRow.total) - Number(paidRow.total) - Number(debitRow.total),
   };
 }

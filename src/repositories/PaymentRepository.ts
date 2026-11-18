@@ -13,6 +13,8 @@ import {
   journalEntries,
   journalEntryLines,
   projects,
+  debitNotes,
+  debitNoteLines,
 } from '../db/schema.js';
 import { findLockedUntil } from '../libs/period-lock.js';
 import { ensureExpenseClaimAccount } from './ExpenseClaimRepository.js';
@@ -76,7 +78,14 @@ async function getPurchaseInvoiceRemainingBalance(businessId: string, purchaseIn
     .from(paymentLines)
     .where(eq(paymentLines.purchaseInvoiceId, purchaseInvoiceId));
 
-  return { supplierId: invoice.supplierId, remaining: invoiceAmount - Number(paid.total) };
+  // Debit Note yang dikaitkan ke faktur ini juga mengurangi sisa tagihan.
+  const [debit] = await db
+    .select({ total: sql<string>`COALESCE(SUM(${debitNoteLines.qty} * ${debitNoteLines.unitPrice}), 0)` })
+    .from(debitNoteLines)
+    .innerJoin(debitNotes, eq(debitNoteLines.debitNoteId, debitNotes.id))
+    .where(eq(debitNotes.purchaseInvoiceId, purchaseInvoiceId));
+
+  return { supplierId: invoice.supplierId, remaining: invoiceAmount - Number(paid.total) - Number(debit.total) };
 }
 
 // Sisa saldo klaim = total baris klaim - Σ(baris Payment yang sudah melunasinya).

@@ -32,6 +32,8 @@ import { billableTimeRoutesPlugin } from './plugins/BillableTimeRoutes.js';
 import { withholdingTaxReceiptRoutesPlugin } from './plugins/WithholdingTaxReceiptRoutes.js';
 import { purchaseQuoteRoutesPlugin } from './plugins/PurchaseQuoteRoutes.js';
 import { creditNoteRoutesPlugin } from './plugins/CreditNoteRoutes.js';
+import { debitNoteRoutesPlugin } from './plugins/DebitNoteRoutes.js';
+import { goodsReceiptRoutesPlugin } from './plugins/GoodsReceiptRoutes.js';
 import { latePaymentFeeRoutesPlugin } from './plugins/LatePaymentFeeRoutes.js';
 import { receiptRoutesPlugin } from './plugins/ReceiptRoutes.js';
 import { bankReconciliationRoutesPlugin } from './plugins/BankReconciliationRoutes.js';
@@ -139,6 +141,8 @@ async function main() {
       instance.register(billableTimeRoutesPlugin, { prefix: '/businesses' });
       instance.register(withholdingTaxReceiptRoutesPlugin, { prefix: '/businesses' });
       instance.register(purchaseQuoteRoutesPlugin, { prefix: '/businesses' });
+      instance.register(debitNoteRoutesPlugin, { prefix: '/businesses' });
+      instance.register(goodsReceiptRoutesPlugin, { prefix: '/businesses' });
       instance.register(creditNoteRoutesPlugin, { prefix: '/businesses' });
       instance.register(latePaymentFeeRoutesPlugin, { prefix: '/businesses' });
       instance.register(expenseClaimPayerRoutesPlugin, { prefix: '/businesses' });

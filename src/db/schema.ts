@@ -510,3 +510,44 @@ export const purchaseQuoteLines = pgTable('purchase_quote_lines', {
   qty: numeric({ precision: 18, scale: 2 }).notNull(),
   unitPrice: numeric({ precision: 18, scale: 2 }).notNull(),
 });
+
+export const debitNotes = pgTable('debit_notes', {
+  id: uuid().defaultRandom().primaryKey(),
+  businessId: uuid().notNull().references(() => businesses.id, { onDelete: 'cascade' }),
+  supplierId: uuid().notNull().references(() => contacts.id),
+  purchaseInvoiceId: uuid().references(() => purchaseInvoices.id), // opsional; bila diisi, memotong sisa tagihan faktur ini
+  issueDate: date().notNull(),
+  reference: varchar({ length: 100 }),
+  description: text(),
+  journalEntryId: uuid().notNull().references(() => journalEntries.id), // jurnal diposting saat Debit Note dibuat
+  createdAt: timestamp().notNull().defaultNow(),
+});
+
+export const debitNoteLines = pgTable('debit_note_lines', {
+  id: uuid().defaultRandom().primaryKey(),
+  debitNoteId: uuid().notNull().references(() => debitNotes.id, { onDelete: 'cascade' }),
+  lineNo: integer().notNull().default(0), // urutan baris sesuai input
+  accountId: uuid().notNull().references(() => chartOfAccounts.id), // akun Expense yang dikurangi
+  qty: numeric({ precision: 18, scale: 2 }).notNull(),
+  unitPrice: numeric({ precision: 18, scale: 2 }).notNull(),
+});
+
+export const goodsReceipts = pgTable('goods_receipts', {
+  id: uuid().defaultRandom().primaryKey(),
+  businessId: uuid().notNull().references(() => businesses.id, { onDelete: 'cascade' }),
+  supplierId: uuid().notNull().references(() => contacts.id),
+  purchaseOrderId: uuid().references(() => purchaseOrders.id, { onDelete: 'set null' }),
+  purchaseInvoiceId: uuid().references(() => purchaseInvoices.id, { onDelete: 'set null' }),
+  receiptDate: date().notNull(),
+  reference: varchar({ length: 100 }),
+  description: text(),
+  createdAt: timestamp().notNull().defaultNow(),
+});
+
+export const goodsReceiptLines = pgTable('goods_receipt_lines', {
+  id: uuid().defaultRandom().primaryKey(),
+  goodsReceiptId: uuid().notNull().references(() => goodsReceipts.id, { onDelete: 'cascade' }),
+  lineNo: integer().notNull().default(0), // urutan baris sesuai input
+  description: text().notNull(),
+  qty: numeric({ precision: 18, scale: 2 }).notNull(),
+});
